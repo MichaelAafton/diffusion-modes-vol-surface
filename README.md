@@ -116,7 +116,7 @@ plot_eigenmodes(eigenvectors, spde.z_grid)
 
 ## Key Results
 
-*(To be filled in as you complete each phase)*
+*(To be filled in as I complete each phase)*
 
 - [ ] Phase 1: Synthetic data generation from stochastic heat equation
 - [ ] Phase 2: Moneyness z and psychological time τ reparameterization
