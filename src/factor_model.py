@@ -2,23 +2,25 @@
 PCA-Based Factor Model for Option Risk
 ========================================
 
-Builds a practical factor model from the PCA results to estimate
-the risk (P&L distribution) of option portfolios (Slide 3, Slide 12).
+Turns the PCA modes into a practical factor model for the risk (P&L distribution)
+of option portfolios — the practical payoff of the project.
 
-The idea: instead of modelling each option independently, decompose
-the portfolio's exposure into a small number of PCA factors. The
-portfolio P&L is approximately:
+Instead of modelling each option independently, decompose the portfolio's exposure
+into a small number ``N`` of PCA factors (``N ≈ 5–7`` from the spectrum):
 
     PnL_portfolio ≈ Σᵢ wᵢ · Fᵢ
 
-where wᵢ are the portfolio's factor loadings and Fᵢ are the factor
-returns (time series of the i-th principal component).
+where ``wᵢ`` are the portfolio's factor loadings and ``Fᵢ`` are the factor returns
+(time series of the i-th principal component).
 
-From Slide 3, a 5-7 factor model captures the P&L curve significantly
-better than an SVI-based fit.
+The validation that matters (Phase 6) is **real and out-of-sample**:
+  - split real data into in-sample (PCA + calibration) and out-of-sample;
+  - construct test portfolios (butterfly, risk reversal, straddle);
+  - predict each P&L distribution and compare predicted vs realised variance and
+    correlations out-of-sample;
+  - show whether the factor model beats a simple **SVI-surface baseline**.
 
-TODO: Implement in Phase 6 of the project. The structure below
-is scaffolding to be filled in once you've completed Phases 1-5.
+Status: scaffolding. Implement once Phases 1–5 are complete.
 """
 
 import numpy as np
@@ -220,3 +222,42 @@ def make_risk_reversal(z_grid: np.ndarray, put_z: float = -1.0, call_z: float = 
     weights[idx_call] = 1.0
 
     return weights
+
+
+def make_straddle(z_grid: np.ndarray, center: float = 0.0) -> np.ndarray:
+    """Create a straddle portfolio in z-space.
+
+    Long the at-the-money strike (a pure vol/convexity bet).
+
+    Parameters
+    ----------
+    z_grid : np.ndarray
+        Moneyness grid.
+    center : float
+        ATM strike in z-space.
+
+    Returns
+    -------
+    weights : np.ndarray, shape (n_z,)
+    """
+    weights = np.zeros_like(z_grid)
+    weights[np.argmin(np.abs(z_grid - center))] = 1.0
+    return weights
+
+
+# ---------------------------------------------------------------------------
+# Baseline for comparison
+# ---------------------------------------------------------------------------
+
+def svi_baseline_risk(*args, **kwargs) -> float:
+    """Predict portfolio P&L risk from a simple SVI-surface baseline.
+
+    The honest test for the factor model is whether it beats a standard
+    parametric surface fit (SVI) out-of-sample — not whether it works at all.
+
+    TODO (Phase 6): fit SVI per maturity slice, propagate to portfolio P&L risk,
+    and compare against ``FactorModel.evaluate_portfolio`` on the same OOS window.
+    """
+    raise NotImplementedError(
+        "SVI baseline — implement in Phase 6 as the comparison benchmark."
+    )

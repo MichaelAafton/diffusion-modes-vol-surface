@@ -3,7 +3,7 @@ Black-Scholes Pricing and Implied Volatility
 =============================================
 
 Implements the Black-Scholes model — not because it's accurate (it isn't),
-but because it serves as the *lingua franca* of options markets (Slide 2).
+but because it serves as the *lingua franca* of options markets.
 
 Options are quoted in terms of implied volatility: the σ you'd plug into
 Black-Scholes to reproduce the observed market price. The collection of
@@ -14,7 +14,7 @@ Key functions:
     bs_delta       — Delta hedge ratio (∂P/∂S)
     bs_vega        — Sensitivity to volatility (∂P/∂σ)
     implied_vol    — Invert BS to find σ from market price
-    delta_hedged_pnl — Compute delta-hedged P&L (Slide 4)
+    delta_hedged_pnl — Compute delta-hedged P&L
 """
 
 import numpy as np
@@ -91,7 +91,7 @@ def bs_delta(
 ) -> float:
     """Black-Scholes delta: ∂P/∂S.
 
-    This is the hedge ratio used to construct delta-hedged P&L (Slide 4):
+    This is the hedge ratio used to construct delta-hedged P&L:
         Δ ≡ ∂P_BS(K, S, T, σ) / ∂S
 
     Parameters
@@ -185,15 +185,19 @@ def delta_hedged_pnl(
     spot_yesterday: float,
     deltas_yesterday: np.ndarray,
 ) -> np.ndarray:
-    """Compute delta-hedged P&L for a set of options (Slide 4).
+    """Compute single-step delta-hedged P&L for a set of options.
 
     The delta-hedged P&L removes the directional exposure to the
     underlying, isolating the "pure volatility" component of returns:
 
         P&L_t = P_t - P_{t-1} - Δ_{t-1} (S_t - S_{t-1})
 
-    This is the quantity whose correlations across strikes reveal
-    the heat equation structure.
+    This is the quantity whose correlations across strikes reveal (or fail to
+    reveal) the heat-equation structure.
+
+    Note: this is one hedge step. The *hedging frequency* used to build a full
+    P&L series is a modelling choice that injects noise and bias — document it
+    explicitly (see ``data_pipeline.ReparamConfig.hedge_frequency``).
 
     Parameters
     ----------

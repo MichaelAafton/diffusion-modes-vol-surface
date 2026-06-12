@@ -3,8 +3,8 @@ Plotting Utilities
 ===================
 
 Consistent, publication-quality plotting functions for all project
-visualisations. Designed to reproduce the style of the presentation
-slides (clean, minimal, with clear labels).
+visualisations (clean, minimal, with clear labels). Designed to render
+synthetic and real results in the same style so they can be shown side by side.
 
 All plot functions return (fig, ax) tuples so you can further
 customise them in notebooks.
@@ -61,7 +61,7 @@ def plot_eigenmodes(
     theoretical_modes: np.ndarray | None = None,
     title: str = "PCA Eigenmodes",
 ) -> tuple[plt.Figure, np.ndarray]:
-    """Plot PCA eigenmodes as functions of moneyness z (Slide 6 style).
+    """Plot PCA eigenmodes as functions of moneyness z.
 
     Parameters
     ----------
@@ -133,7 +133,8 @@ def plot_eigenvalue_spectrum(
 ) -> tuple[plt.Figure, tuple]:
     """Plot the eigenvalue spectrum: bar chart + log-log scaling.
 
-    Reproduces the style of Slides 6 (bar chart) and 9 (log-log).
+    The log-log panel with a k⁻² reference line is the central real-data test of
+    Phase 4 (fit λₖ ~ k⁻ᵅ and read off where the spectrum leaves k⁻²).
 
     Parameters
     ----------
@@ -241,7 +242,7 @@ def plot_rolling_stability(
     n_modes: int = 5,
     title: str = "Eigenmode Stability Over Time",
 ) -> tuple[plt.Figure, np.ndarray]:
-    """Plot eigenmodes from rolling windows overlaid (Slide 8 style).
+    """Plot eigenmodes from rolling windows overlaid (stability check).
 
     Shows all rolling-window eigenvectors as faint lines, with the
     mean highlighted, to demonstrate stability.
@@ -304,7 +305,7 @@ def plot_string_simulation(
     surface_snapshot: np.ndarray,
     title: str = "Volatility Surface as a Vibrating String",
 ) -> tuple[plt.Figure, plt.Axes]:
-    """Visualise a snapshot of the surface as a displaced string (Slide 9).
+    """Visualise a snapshot of the surface as a displaced string.
 
     Parameters
     ----------

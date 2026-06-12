@@ -1,9 +1,23 @@
 # Data Directory
 
-This directory contains data files for the project.
+Data files are **not** tracked by git (see `.gitignore`); only the directory
+structure is kept via `.gitkeep` files.
 
-- `raw/` — Raw options data (if using real market data)
-- `processed/` — Preprocessed data with (z, τ) coordinates
-- `synthetic/` — Generated data from SPDE simulations
+| Subdir | Contents |
+|--------|----------|
+| `raw/` | Raw options data from a real source (see below). |
+| `processed/` | Cleaned data reparameterized into `(z, τ)` coordinates. |
+| `synthetic/` | Output of the stochastic-heat-equation simulator — the **validation harness**, not the study. |
 
-Data files are not tracked by git (see .gitignore).
+## Real data sources
+
+In order of preference (see the project README for detail):
+
+1. **WRDS / OptionMetrics (IvyDB)** — standard academic source for historical
+   equity implied vols and Greeks; free if your institution subscribes.
+2. **Deribit BTC/ETH options** — free public API, several years of liquid
+   crypto-option history.
+3. **yfinance** — current chains only; a snapshot sanity check, not a basis for
+   the time-series PCA.
+
+Pick one real source early and commit to it — every later phase depends on it.
