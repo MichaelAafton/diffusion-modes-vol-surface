@@ -11,9 +11,6 @@ seaborn>=0.12
 jupyter>=1.0
 jupyterlab>=4.0
 
-# Options pricing
-py_vollib>=1.0.1
-
 # Progress bars
 tqdm>=4.65
 
