@@ -9,7 +9,7 @@ The stochastic heat equation on a domain z ∈ [-L/2, L/2]:
 
     ∂ₜp = D ∂²_z p + ξ(z,t)
 
-has Fourier mode decomposition (Slide 9):
+has Fourier mode decomposition:
 
     p(z,t) = Σₖ fₖ(t) φₖ(z)
 
@@ -18,15 +18,15 @@ where:
     ∂ₜfₖ = -Dk² fₖ + ξₖ(t)                (OU process per mode)
     ⟨fₖ²⟩ ~ 1/(Dk²)                        (stationary variance)
 
-This predicts:
+This predicts (and these are the quantities to test against real data):
     - PCA eigenvectors ≈ sinusoidal functions of z
     - PCA eigenvalues ∝ k⁻²
     - Correlation C(z₁,z₂) depends on |z₁-z₂| through a specific kernel
 
-From Slide 10, the 2D Fourier modes were:
-    Mode (z0,τ0): 1
-    Mode (z1,τ0): sin(πz/4)
-    Mode (z0,τ1): sin(π(τ - 8.6)/7.7)
+The central real-data test is the eigenvalue scaling: fit λₖ ~ k⁻ᵅ and report α.
+On the synthetic harness α ≈ 2 by construction; on real data the *deviation* from
+k⁻² — where the market is not a clean diffusive membrane (jumps, supply/demand
+dislocations, earnings, non-local structure) — is the contribution.
 """
 
 import numpy as np

@@ -1,11 +1,17 @@
 """
-Diffusion Modes of the Volatility Surface: Discovering heat equation dynamics in the volatility surface.
+Heat-Equation Dynamics in the Volatility Surface.
 
-This package provides tools for:
-- Simulating stochastic PDEs on the volatility surface
-- Black-Scholes pricing and implied volatility inversion
-- PCA analysis of option returns
-- Connecting empirical PCA structure to heat equation eigenfunctions
-- Calibrating field theory parameters
-- Building PCA-based factor models for option risk
+A pipeline for testing whether option-surface dynamics behave like a stochastic
+heat equation — validated on synthetic ground truth, then tested on real data.
+
+Modules
+-------
+- simulate       : stochastic heat-equation simulator (the validation harness)
+- black_scholes  : BS pricing, Greeks, IV inversion, delta-hedged P&L
+- data_pipeline  : load real + synthetic data; (z, τ) reparameterization
+- pca            : PCA, rolling-window stability, factor projection
+- heat_equation  : analytical Fourier modes, eigenvalue scaling, mode overlap
+- calibration    : field-theory (κ, μ) calibration
+- factor_model   : PCA-based factor model for option-portfolio risk
+- plotting       : consistent, publication-quality figures
 """
