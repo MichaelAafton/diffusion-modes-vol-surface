@@ -1,8 +1,15 @@
 """
-Stochastic Heat Equation Simulator
-===================================
+Stochastic Heat Equation Simulator — the Validation Harness
+============================================================
 
-Simulates the stochastic PDE that governs volatility surface dynamics:
+This simulator is the project's **validation harness**, not its study. By
+generating data from a known stochastic heat equation and running the entire
+downstream pipeline on it, we confirm the PCA / reparameterization / fitting code
+recovers what we put in (sinusoidal modes, λₖ ~ k⁻², the correct diffusion
+constant D). A clean fit here proves the *code* is correct — it is not a finding.
+The findings come from real data.
+
+Simulates the stochastic PDE hypothesized to govern volatility-surface dynamics:
 
     ∂ₜp(z,t) = D ∂²_z p(z,t) + ξ(z,t)
 
@@ -19,8 +26,8 @@ as an Ornstein-Uhlenbeck process:
 with stationary variance ⟨fₖ²⟩ = σ²_noise / (2Dk²).
 
 This is the same equation that describes heat diffusion in a rod, or the
-fluctuations of an elastic string — which is exactly the physical analogy
-from the presentation.
+fluctuations of an elastic string — the physical analogy at the heart of the
+project.
 
 References:
     - Ioselevich, P. "A Data-Driven Factor Model for Option Risk"
@@ -232,10 +239,9 @@ class StochasticHeatEquation2D:
 
     where τ is "psychological time" (log-transformed maturity).
 
-    This corresponds to the full 2D analysis in Slides 10-11 of the
-    presentation.
+    This corresponds to the full 2D ``(z, τ)`` analysis (Phases 3–5).
 
-    TODO: Implement in Phase 4/5 of the project.
+    TODO: Implement alongside the 2D PCA / field-theory work.
     """
 
     def __init__(self):
@@ -255,10 +261,10 @@ def generate_synthetic_dataset(
     n_z: int = 50,
     seed: int = 42,
 ) -> dict:
-    """Generate a complete synthetic dataset for the project.
+    """Generate a complete synthetic dataset for the validation harness.
 
-    This is the main entry point for Phase 1. It creates everything
-    you need to proceed to PCA analysis.
+    Entry point for the Phase 1 harness: it produces known ground truth so the
+    downstream pipeline can be verified before it is pointed at real data.
 
     Parameters
     ----------

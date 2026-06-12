@@ -1,138 +1,202 @@
-# Discovering Heat Equation Dynamics in the Volatility Surface
+# Heat-Equation Dynamics in the Volatility Surface
 
-A data-driven investigation into how option returns co-move across the volatility surface, revealing that the correlation structure is consistent with a stochastic heat (diffusion) equation — the same PDE that governs thermal diffusion in physics.
+**Testing a field-theory factor model against real options data.**
 
-Inspired by the work of **Pavel Ioselevich** (Capital Fund Management) presented at the Cambridge Quant Conference 2026, and building on the elastic string models of **Victor Le Coz & Jean-Philippe Bouchaud**.
+A physics / data-science / quantitative-finance research project that asks a single
+honest question: *does the option volatility surface really move like a diffusive
+membrane — and where does that picture break?*
+
+Inspired by Pavel **Ioselevich** (Capital Fund Management), *A Data-Driven Factor Model
+for Option Risk*, and building on the elastic-string models of **Le Coz & Bouchaud**.
 
 ---
 
-## Overview
+## The idea in one paragraph
 
-Option markets produce a 2D surface of implied volatilities across strikes and maturities. This project studies **how that surface moves over time** by:
+Option markets quote a 2D surface of implied volatilities across strikes and maturities.
+If you reparameterize that surface into standard-deviation moneyness `z` and a compressed
+"psychological time" `τ`, the daily co-movement of delta-hedged P&Ls looks suspiciously
+like the dynamics of a **stochastic heat equation** — the same PDE that governs diffusion
+in physics. This project builds the full pipeline (data → delta-hedged P&L → PCA →
+eigenmodes → field-theory fit → factor model) and tests that hypothesis. The deliverable
+is a small, validated factor model for option-portfolio risk together with an honest
+account of where the diffusive picture holds and where it fails.
 
-1. **Reparameterizing** strikes into normalised moneyness $z = \log(K/S) / \sigma$ and maturities into psychological time $\tau = \psi \log(1 + T/\psi)$
-2. **Running PCA** on delta-hedged option returns to extract the dominant modes of variation
-3. **Showing** that these eigenmodes are sinusoidal — consistent with eigenfunctions of the Laplacian $\partial^2/\partial z^2$
-4. **Demonstrating** that eigenvalues decay as $\sim k^{-2}$, the signature of a diffusion/heat process
-5. **Fitting** a stochastic heat equation $\partial_t p = D\partial_z^2 p + \xi(z,t)$ to the empirical correlation structure
-6. **Building** a practical factor model for option portfolio risk
+## The reframe (why this project is structured the way it is)
 
-## Physics Connection
+A naive version of this study has a fatal flaw: if you *generate* data from a stochastic
+heat equation and then "discover" that it has the eigenstructure of a stochastic heat
+equation, you have proved nothing — you put the answer in. A clean `λ_k ~ k⁻²` fit on
+synthetic data is a **unit test of the simulator**, not a finding.
 
-The volatility surface behaves like a **vibrating elastic membrane**:
-- Random trading shocks perturb it locally (the noise term $\xi$)
-- Perturbations diffuse across nearby strikes and maturities (the $D\partial_z^2$ term)
-- Short-wavelength disturbances decay faster than long-wavelength ones ($\sim k^{-2}$ eigenvalue scaling)
-- The "stiffness" parameter $D$ is remarkably consistent across equity indices, commodities, and FX
+So the roles are inverted on purpose:
 
-This is an example of **universality**: the same mathematical structure emerges in finance as in physics — not because markets imitate nature, but because both systems involve the aggregation of many small, local, random perturbations.
+- **Synthetic data is the validation harness.** It exists only to prove the pipeline
+  recovers known ground truth (sinusoidal modes, `λ_k ~ k⁻²`, the correct diffusion
+  constant `D`). This belongs in *methodology*, labelled as exactly that.
+- **Real options data is the actual study.** The research contribution is precisely
+  *where real surfaces match the diffusive-membrane picture and where they deviate from
+  it.* The deviations are the result, not a failure.
 
-## Project Structure
+> *"The first three modes match the heat-equation prediction, but the eigenvalue tail
+> departs from `k⁻²` because real skew has non-diffusive structure"* is a far stronger,
+> more credible sentence than any clean fit on simulated data.
+
+## Background you need (and where to get it)
+
+You need working intuition, not mastery, in four areas:
+
+| Area | The one-line version | Resource |
+|------|----------------------|----------|
+| **Options** | A call/put gives nonlinear exposure to the underlying; payoff `max(±(S−K), 0)`. | Hull, ch. 1, 10 |
+| **Black–Scholes & implied vol** | Prices are quoted as the `σ` you'd plug into BS to reproduce them. | Hull ch. 13, 15; `py_vollib` |
+| **The vol surface** | Implied vol `σ(K,T)` for every traded strike/maturity; it smiles/skews, and it *moves*. | Gatheral, *The Volatility Surface* |
+| **Delta-hedged P&L** | Hedging away delta isolates vol/convexity exposure — but "continuously" is a fiction; the hedging frequency is a modelling choice that injects noise and bias. | (documented in `data_pipeline.py`) |
+| **PCA** | Eigendecomposition of the return correlation matrix; eigenvectors are independent modes of variation, eigenvalues their variance share. | StatQuest / any linear-algebra text |
+| **The heat equation** | `∂ₜu = D ∂²ₓu`; on a finite domain its eigenfunctions are sinusoidal with eigenvalues `~ k²`. | Bouchaud & Potters |
+
+**The physics connection.** If vol-surface returns obey a stochastic heat equation
 
 ```
-vol-surface-dynamics/
-├── README.md
-├── LICENSE
+∂ₜ p(z,t) = D ∂²_z p(z,t) + ξ(z,t)            (ξ = white noise)
+```
+
+then decomposing in Fourier modes `p = Σ fₖ cos(kz)` makes each mode an
+Ornstein–Uhlenbeck process `∂ₜfₖ = −D k² fₖ + ξₖ(t)` with stationary variance `~ 1/k²`.
+PCA on the correlation matrix should therefore return **sinusoidal eigenvectors** with
+eigenvalues decaying as **`λₖ ~ k⁻²`**. That is the prediction this project tests against
+real data — not assumes.
+
+## Repository structure
+
+```
+diffusion-modes-vol-surface/
+├── README.md                     # this file
+├── LICENSE                       # MIT
 ├── requirements.txt
-├── .gitignore
 ├── setup.py
 │
-├── src/                        # Core library
-│   ├── __init__.py
-│   ├── simulate.py             # Stochastic PDE simulation
-│   ├── black_scholes.py        # BS pricing, Greeks, IV inversion
-│   ├── data_pipeline.py        # Data loading, cleaning, reparameterization
-│   ├── pca.py                  # PCA analysis and mode extraction
-│   ├── heat_equation.py        # Analytical solutions, Fourier modes, comparison
-│   ├── calibration.py          # Field theory parameter fitting (μ, κ)
-│   ├── factor_model.py         # PCA-based risk factor model
-│   └── plotting.py             # Consistent, publication-quality plot styling
+├── src/                          # reusable library (tools, not the study)
+│   ├── simulate.py               # stochastic heat-equation simulator (validation harness)
+│   ├── black_scholes.py          # BS pricing, Greeks, IV inversion, delta-hedged P&L
+│   ├── data_pipeline.py          # load real + synthetic data; (z, τ) reparameterization
+│   ├── pca.py                    # PCA, rolling-window stability, factor projection
+│   ├── heat_equation.py          # analytical Fourier modes, λ_k scaling, mode overlap
+│   ├── calibration.py            # field-theory (κ, μ) calibration
+│   ├── factor_model.py           # PCA-based portfolio risk model
+│   └── plotting.py               # consistent, publication-quality figures
 │
-├── notebooks/                  # Analysis notebooks (narrative + code)
-│   ├── 01_data_generation.ipynb
-│   ├── 02_reparameterization.ipynb
-│   ├── 03_pca_analysis.ipynb
-│   ├── 04_physics_connection.ipynb
-│   ├── 05_field_theory_fit.ipynb
-│   └── 06_factor_model.ipynb
+├── notebooks/                    # narrative: synthetic harness vs real data, compared
+│   ├── 01_data.ipynb             # Phase 1 — validation harness, then real data
+│   ├── 02_reparam.ipynb          # Phase 2 — (z, τ) reparameterization (with the √T fix)
+│   ├── 03_pca.ipynb              # Phase 3 — PCA on both, side by side
+│   ├── 04_physics.ipynb          # Phase 4 — eigenvalue scaling; where it deviates
+│   ├── 05_field_theory.ipynb     # Phase 5 — fit (κ, μ); universality as a question
+│   └── 06_factor_model.ipynb     # Phase 6 — factor model + out-of-sample test
 │
-├── tests/                      # Unit tests
-│   ├── __init__.py
+├── tests/                        # unit tests, incl. the synthetic-recovery harness
 │   ├── test_simulate.py
 │   ├── test_black_scholes.py
+│   ├── test_data_pipeline.py
 │   └── test_pca.py
 │
-├── data/                       # Data directory (not committed to git)
-│   ├── raw/
-│   ├── processed/
-│   └── synthetic/
+├── data/                         # data lives here (contents git-ignored)
+│   ├── raw/                      # raw options data (real)
+│   ├── processed/                # cleaned data in (z, τ) coordinates
+│   └── synthetic/                # simulator output (the validation harness)
 │
-└── report/                     # Written report
-    └── (report.pdf)
+└── report/                       # written report (10–15 pages)
+    └── README.md                 # report outline; report.pdf goes here
 ```
 
-## Getting Started
-
-### Prerequisites
-
-- Python 3.10+
-- PyCharm (recommended IDE)
-
-### Installation
+## Getting started
 
 ```bash
-# Clone the repository
-git clone https://github.com/YOUR_USERNAME/vol-surface-dynamics.git
-cd vol-surface-dynamics
+git clone https://github.com/michaelaafton/diffusion-modes-vol-surface.git
+cd diffusion-modes-vol-surface
 
-# Create a virtual environment (PyCharm can do this for you)
 python -m venv .venv
-source .venv/bin/activate   # Linux/Mac
-# .venv\Scripts\activate    # Windows
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
-# Install dependencies
 pip install -r requirements.txt
-
-# Install the project in editable mode
 pip install -e .
 ```
 
-### Quick Start
+Run the validation harness (synthetic recovery) and the test suite:
 
-```python
-from src.simulate import StochasticHeatEquation
-from src.pca import run_pca, plot_eigenmodes
-
-# Generate synthetic volatility surface data
-spde = StochasticHeatEquation(D=0.05, n_z=50, z_range=(-3, 3))
-data = spde.simulate(n_days=2000)
-
-# Run PCA on the simulated returns
-eigenvalues, eigenvectors = run_pca(data, n_components=10)
-
-# Visualize eigenmodes
-plot_eigenmodes(eigenvectors, spde.z_grid)
+```bash
+pytest                           # unit tests, including synthetic recovery
+jupyter lab notebooks/           # work through 01 → 06
 ```
 
-## Key Results
+```python
+# The validation harness: simulate known ground truth, confirm the pipeline recovers it.
+from src.simulate import generate_synthetic_dataset
+from src.pca import run_pca
 
-*(To be filled in as I complete each phase)*
+data = generate_synthetic_dataset(n_days=2000, D=0.05, n_z=50, seed=42)
+pca = run_pca(data["returns"], n_components=10)
+# Expect: ~flat leading mode, sinusoidal higher modes, eigenvalues ≈ k⁻².
+```
 
-- [ ] Phase 1: Synthetic data generation from stochastic heat equation
-- [ ] Phase 2: Moneyness z and psychological time τ reparameterization
-- [ ] Phase 3: PCA reveals sinusoidal eigenmodes, ~k⁻² eigenvalue decay
-- [ ] Phase 4: Quantitative match between PCA modes and Laplacian eigenfunctions
-- [ ] Phase 5: Field theory fit with μ, κ parameters
-- [ ] Phase 6: Factor model for option portfolio risk
+## Conventions (state them explicitly — they matter)
+
+- **Moneyness** uses standard-deviation-to-expiry scaling:
+  `z = log(K/S) / (σ·√T)`. The `√T` is *not* optional — implied vol `σ` is annualized, so
+  without it `z` is not comparable across maturities and the whole `τ`-dimension analysis is
+  distorted. (Equivalently: scale by total implied variance over the option's life.)
+- **Psychological time** compresses the maturity axis: `τ = ψ·log(1 + T/ψ)` with
+  `ψ ≈ 20–30` business days, matching the intuition that 1m-vs-2m feels larger than 1y-vs-2y.
+- **Delta-hedged P&L** requires a chosen **hedging frequency**. This is a modelling decision
+  that injects both noise and bias into every downstream number; it is documented, not buried.
+
+## Data sources
+
+Deep historical full-surface options data is expensive. Viable routes, in order of
+preference:
+
+1. **WRDS / OptionMetrics (IvyDB)** — the standard academic source for historical equity
+   implied vols and Greeks; free if your institution subscribes. Cleanest path to real
+   equity surfaces.
+2. **Deribit BTC/ETH options** — free public API, several years of liquid crypto-option
+   history. Younger and weirder than equity index, which makes the "where does the membrane
+   break?" question *more* interesting.
+3. **yfinance** — current chains only, *not* deep history; fine for a snapshot sanity check,
+   insufficient to drive the time-series PCA at the core of this project.
+
+## Roadmap
+
+| Weeks | Phase | What happens | Key module |
+|------:|-------|--------------|------------|
+| 1–2 | Prep | Options, implied vol, PCA, heat equation, delta-hedging mechanics | — |
+| 3 | **1** | Synthetic validation harness; secure + load a real data source | `simulate.py`, `data_pipeline.py` |
+| 3–4 | **2** | `(z, τ)` reparameterization with the √T fix; document conventions | `data_pipeline.py` |
+| 4–5 | **3** | Identical PCA on synthetic and real; reproduce + compare key plots | `pca.py` |
+| 5–7 | **4** | Eigenvalue scaling `λₖ ~ k⁻ᵅ`, Fourier overlap — *quantify the deviation* | `heat_equation.py` |
+| 7–8 | **5** | Field-theory calibration `(κ, μ)`; test universality across assets | `calibration.py` |
+| 8–9 | **6** | Factor model + out-of-sample validation on real data vs an SVI baseline | `factor_model.py` |
+| 9–10 | Polish | Report, code cleanup, README | — |
+
+## Status / key results
+
+Results are filled in honestly as each phase completes. The synthetic recovery is a
+*validation step*; the headline results come from real data, deviations included.
+
+- [ ] **Phase 1** — Synthetic harness recovers ground truth; real data acquired and loaded
+- [ ] **Phase 2** — `(z, τ)` reparameterization with documented conventions
+- [ ] **Phase 3** — PCA eigenmodes & spectra, synthetic vs real, side by side
+- [ ] **Phase 4** — Power-law exponent `α` for both sources; where real surfaces leave `k⁻²`
+- [ ] **Phase 5** — `(κ, μ)` fit with confidence intervals; the universality question
+- [ ] **Phase 6** — Out-of-sample factor-model risk vs realised, vs SVI baseline
 
 ## References
 
-- Ioselevich, P. — *A Data-Driven Factor Model for Option Risk*, Cambridge Quant Conference
-- Le Coz, V. & Bouchaud, J.-P. — Elastic string models for forward interest rates
-- Gatheral, J. — *The Volatility Surface: A Practitioner's Guide*
-- Bouchaud, J.-P. & Potters, M. — *Theory of Financial Risk and Derivative Pricing*
-- Hull, J. — *Options, Futures, and Other Derivatives*
+- Ioselevich, P. — *A Data-Driven Factor Model for Option Risk*.
+- Le Coz, V. & Bouchaud, J.-P. — Elastic-string models for forward rates.
+- Gatheral, J. — *The Volatility Surface: A Practitioner's Guide*.
+- Bouchaud, J.-P. & Potters, M. — *Theory of Financial Risk and Derivative Pricing*.
+- Hull, J. — *Options, Futures, and Other Derivatives*.
 
 ## License
 
-This project is licensed under the MIT License — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE).

@@ -1,9 +1,12 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="Diffusion Modes of the Volatility Surface",
+    name="vol-surface-dynamics",
     version="0.1.0",
-    description="Discovering heat equation dynamics in the volatility surface",
+    description=(
+        "Heat-equation dynamics in the volatility surface: testing a "
+        "field-theory factor model against real options data."
+    ),
     packages=find_packages(),
     python_requires=">=3.10",
 )

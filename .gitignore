@@ -21,12 +21,13 @@ env/
 .ipynb_checkpoints/
 *.ipynb_metadata/
 
-# Data (too large for git)
-data/raw/
-data/processed/
-data/synthetic/*.csv
-data/synthetic/*.parquet
-data/synthetic/*.pkl
+# Data (too large for git) — keep the directory structure, ignore the contents
+data/raw/*
+data/processed/*
+data/synthetic/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/synthetic/.gitkeep
 
 # OS
 .DS_Store

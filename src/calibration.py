@@ -1,50 +1,57 @@
 """
-Field Theory Calibration
+Field-Theory Calibration
 =========================
 
-Fits the parameters μ and κ of the 2D field theory model to the
-empirical correlation structure of option returns (Slide 11).
+Calibrates the two effective stiffness parameters ``(κ, μ)`` of the 2D field
+theory to the **empirical** correlation structure of real option returns, and
+tests how well the heat-equation form matches the data.
 
-The 2D stochastic PDE on the (z, τ) surface:
+The 2D stochastic PDE on the ``(z, τ)`` surface,
 
-    ∂ₜp = D_z ∂²_z p + D_τ ∂²_τ p + ξ(z,τ,t)
+    ∂ₜp = κ ∂²_z p + μ ∂²_τ p + ξ(z,τ,t),
 
-can be parameterised by:
-    μ — controls the effective diffusion along moneyness z
-    κ — controls the effective diffusion along psychological time τ
+makes correlation depend on "distance" in ``(z, τ)`` space:
+    κ — effective diffusion/stiffness along moneyness z
+    μ — effective diffusion/stiffness along psychological time τ
 
-From the presentation:
-    - μ ~ 0.5-0.9 for most asset classes
-    - κ stays low and flat (~0.05-0.2)
-    - Fit error ~5%
-    - VIX options and KOSPI are outliers
+Procedure (Phase 5)
+-------------------
+1. Compute the empirical correlation matrix from real data.
+2. Write the model correlation matrix as a function of ``(κ, μ)``.
+3. Minimise ‖C_empirical − C_model(κ, μ)‖²_F via ``scipy.optimize``; report fit
+   quality and parameter confidence intervals.
 
-These two parameters encode the overall "stiffness" of the volatility
-surface membrane, and are remarkably consistent across equities,
-commodities, and FX — a strong universality claim.
+On "universality" — frame it as a question, not a result
+---------------------------------------------------------
+The original presentation suggests the fitted parameters are roughly consistent
+across assets. This is the part **most likely not to replicate** on real data:
+equity-index skew, single-stock skew, and crypto-option skew genuinely differ in
+shape. Treat cross-asset consistency as an *open hypothesis to test*, and report
+the differences honestly. "Universality holds for the leading modes but the fitted
+stiffness differs across asset classes" is a more credible — and more interesting —
+finding than a forced claim of universality.
 
-TODO: Implement this in Phase 5 of the project. The structure below
-is scaffolding to be filled in once you've completed Phases 1-4.
+Status: scaffolding. Implement once Phases 1–4 are complete.
 """
 
 import numpy as np
 from dataclasses import dataclass
-from scipy.optimize import minimize
+from scipy.optimize import minimize  # noqa: F401  (used once fitting is implemented)
 
 
 @dataclass
 class FieldTheoryParams:
-    """Parameters of the 2D field theory model.
+    """Effective stiffness parameters of the 2D field theory.
 
     Attributes
     ----------
-    mu : float
-        Diffusion parameter along moneyness z.
     kappa : float
-        Diffusion parameter along psychological time τ.
+        Stiffness along moneyness ``z``.
+    mu : float
+        Stiffness along psychological time ``τ``.
     """
-    mu: float = 0.7
     kappa: float = 0.1
+    mu: float = 0.7
 
 
 def model_correlation_2d(
@@ -54,38 +61,17 @@ def model_correlation_2d(
     n_terms_z: int = 20,
     n_terms_tau: int = 10,
 ) -> np.ndarray:
-    """Compute the model correlation matrix for the 2D field theory.
+    """Model correlation matrix for the 2D field theory over the flattened grid.
 
-    The correlation between points (z₁,τ₁) and (z₂,τ₂) is predicted
-    by the 2D stochastic heat equation with parameters μ and κ.
+    Sketch of the approach:
+      1. Build the 2D Fourier basis φ_{k,l}(z,τ) = cos(kπz/L_z)·cos(lπτ/L_τ).
+      2. Each mode has variance ~ 1 / (κ k² + μ l²).
+      3. C(i,j) = Σ_{k,l} w_{k,l} φ_{k,l}(zᵢ,τᵢ) φ_{k,l}(zⱼ,τⱼ), normalised to unit diagonal.
 
-    Parameters
-    ----------
-    z_grid : np.ndarray, shape (n_z,)
-        Moneyness grid.
-    tau_grid : np.ndarray, shape (n_tau,)
-        Psychological time grid.
-    params : FieldTheoryParams
-        Model parameters.
-    n_terms_z : int
-        Number of Fourier terms in z-direction.
-    n_terms_tau : int
-        Number of Fourier terms in τ-direction.
-
-    Returns
-    -------
-    C : np.ndarray, shape (n_z * n_tau, n_z * n_tau)
-        Model correlation matrix over the flattened 2D grid.
+    TODO (Phase 5): implement after the 1D analysis (Phases 1–4) is complete.
     """
-    # TODO: Implement in Phase 5
-    # Sketch of the approach:
-    # 1. Build the 2D Fourier basis: φ_{k,l}(z,τ) = cos(kπz/Lz) cos(lπτ/Lτ)
-    # 2. Each mode has variance ~ 1/(μ k² + κ l²)
-    # 3. Compute C(i,j) = Σ_{k,l} w_{k,l} φ_{k,l}(zᵢ,τᵢ) φ_{k,l}(zⱼ,τⱼ)
-    # 4. Normalise to unit diagonal
     raise NotImplementedError(
-        "2D model correlation — implement in Phase 5 after completing "
-        "the 1D analysis in Phases 1-4."
+        "2D model correlation — implement in Phase 5 after the 1D analysis."
     )
 
 
@@ -95,29 +81,19 @@ def fit_field_theory(
     tau_grid: np.ndarray,
     initial_params: FieldTheoryParams | None = None,
 ) -> dict:
-    """Fit μ and κ to the empirical 2D correlation matrix.
+    """Fit ``(κ, μ)`` to the empirical 2D correlation matrix.
 
-    Minimises ||C_empirical - C_model(μ, κ)||² over (μ, κ).
-
-    Parameters
-    ----------
-    empirical_corr : np.ndarray, shape (n_z * n_tau, n_z * n_tau)
-        Empirical correlation matrix.
-    z_grid : np.ndarray
-        Moneyness grid.
-    tau_grid : np.ndarray
-        Psychological time grid.
-    initial_params : FieldTheoryParams or None
-        Starting point for optimisation.
+    Minimises ‖C_empirical − C_model(κ, μ)‖²_F over ``(κ, μ)``.
 
     Returns
     -------
-    result : dict with keys:
-        'params'         : FieldTheoryParams — best-fit parameters
-        'model_corr'     : np.ndarray — model correlation at best fit
-        'relative_error' : float — relative Frobenius error
+    result : dict with keys
+        'params'          : FieldTheoryParams — best-fit ``(κ, μ)``
+        'confidence'      : dict — confidence intervals for each parameter
+        'model_corr'      : np.ndarray — model correlation at best fit
+        'relative_error'  : float — relative Frobenius error
+
+    TODO (Phase 5): implement the fit and bootstrap/Hessian confidence intervals,
+    then run it per asset class and *report cross-asset differences honestly*.
     """
-    # TODO: Implement in Phase 5
-    raise NotImplementedError(
-        "Field theory fitting — implement in Phase 5."
-    )
+    raise NotImplementedError("Field-theory fitting — implement in Phase 5.")

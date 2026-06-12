@@ -6,17 +6,22 @@ Implements Principal Component Analysis on the correlation matrix of
 option returns (delta-hedged P&Ls) to extract the dominant modes of
 variation of the volatility surface.
 
-The key finding (Slides 6-8):
-    - Eigenmode 0: ~flat (parallel shift) — explains ~84% of variance
-    - Eigenmode 1: ~linear (tilt/skew) — explains ~11.5%
-    - Eigenmode 2: ~quadratic (smile) — explains ~3%
+Expected shape (the heat-equation prediction — to be *tested* on real data, not
+assumed):
+    - Eigenmode 0: ~flat (parallel shift) — typically the bulk of the variance
+    - Eigenmode 1: ~monotone (tilt/skew)
+    - Eigenmode 2: ~one-node (smile)
     - Higher modes: increasingly oscillatory (more nodes)
-    - Eigenvalues decay as ~k⁻² — signature of a diffusion process
-    - These modes are remarkably stable over decades of data
+    - Eigenvalues decay as ~k⁻² if the dynamics are diffusive
 
-The mathematical reason: if the underlying dynamics are governed by
-a stochastic heat equation, PCA recovers the eigenfunctions of the
-Laplacian operator, which are sinusoidal (Fourier modes).
+On synthetic harness data this comes out clean by construction. On real data,
+report the *actual* variance shares, whether the leading modes are genuinely
+stable across rolling windows, and how far the spectrum departs from k⁻² — those
+differences are the data, not error.
+
+The mathematical reason for the prediction: if the dynamics are governed by a
+stochastic heat equation, PCA recovers the (sinusoidal) eigenfunctions of the
+Laplacian operator.
 """
 
 import numpy as np
@@ -65,7 +70,7 @@ def run_pca(
     use_correlation : bool
         If True, decompose the correlation matrix (standardised).
         If False, decompose the covariance matrix.
-        The presentation uses correlation (Slide 6).
+        We decompose the correlation matrix by default.
 
     Returns
     -------
@@ -127,7 +132,10 @@ def rolling_pca(
     step_size: int = 50,
     n_components: int = 5,
 ) -> list[PCAResult]:
-    """Run PCA on rolling windows to assess stability (Slide 8).
+    """Run PCA on rolling windows to assess stability.
+
+    On real data, the strong claim to test is whether the leading modes are
+    genuinely stable over time, or only appear so in-sample.
 
     Parameters
     ----------
@@ -163,7 +171,7 @@ def align_eigenvector_signs(
     """Align eigenvector signs across rolling windows.
 
     Eigenvectors are defined up to a sign flip. To compare them over
-    time (as in Slide 8), we need consistent orientation.
+    time (the stability check), we need consistent orientation.
 
     Strategy: for each mode, ensure positive inner product with a
     reference (either the first window or a provided reference).
