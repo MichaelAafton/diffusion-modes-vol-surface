@@ -63,9 +63,8 @@ You need working intuition, not mastery, in four areas:
 
 then decomposing in Fourier modes `p = Σ fₖ cos(kz)` makes each mode an
 Ornstein–Uhlenbeck process `∂ₜfₖ = −D k² fₖ + ξₖ(t)` with stationary variance `~ 1/k²`.
-PCA on the correlation matrix should therefore return **sinusoidal eigenvectors** with
-eigenvalues decaying as **`λₖ ~ k⁻²`**. That is the prediction this project tests against
-real data — not assumes.
+The k^-2 law describes stationary variance for mode levels; PCA on daily changes sees the increment spectrum - 2Vₖ(1−e^(−γₖdt)) - flat for slow modes,
+k^-2 for fast ones, and it is this corrected prediction the validation harness tests.
 
 ## Repository structure
 
@@ -136,7 +135,10 @@ from src.pca import run_pca
 
 data = generate_synthetic_dataset(n_days=2000, D=0.05, n_z=50, seed=42)
 pca = run_pca(data["returns"], n_components=10)
-# Expect: ~flat leading mode, sinusoidal higher modes, eigenvalues ≈ k⁻².
+theory = spde.theoretical_increment_eigenvalues(10)
+# PCA runs on DAILY CHANGES, so the correct ground truth is the OU
+# increment spectrum Var(Δf_k) ∝ 2V_k(1 − exp(−γ_k dt)):
+# ~flat for slow modes, → k⁻² for fast ones. See tests/test_simulate.py.
 ```
 
 ## Conventions (state them explicitly — they matter)
