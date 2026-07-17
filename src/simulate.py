@@ -33,7 +33,6 @@ References:
     - Ioselevich, P. "A Data-Driven Factor Model for Option Risk"
     - Le Coz, V. & Bouchaud, J.-P. — elastic string models for forward rates
 """
-
 import numpy as np
 from dataclasses import dataclass
 
@@ -170,10 +169,11 @@ class StochasticHeatEquation:
                 f_modes * exp_decay
                 + self.rng.normal(0, 1, size=cfg.n_modes) * noise_std
             )
-            f_mean = (
-                f_mean * mean_decay
-                + self.rng.normal(0, mean_noise_std)
-            )
+            if cfg.include_mean_mode:
+                f_mean = (
+                        f_mean * mean_decay
+                        + self.rng.normal(0, mean_noise_std)
+                )
 
         return surface
 
@@ -229,6 +229,23 @@ class StochasticHeatEquation:
             Each row is one eigenfunction φₖ(z).
         """
         return self.basis_functions[:n_components, :]
+
+    def theoretical_increment_eigenvalues(self, n_components: int) -> np.ndarray:
+        """Theoretical spectrum for PCA on DAILY CHANGES (returns).
+
+           The k^-2 law describes the stationary variance of mode LEVELS.
+           Increments of an OU process obey a different law:
+
+               Var(Δf_k) = 2 V_k (1 - exp(-γ_k dt)),   V_k = σ²/(2γ_k)
+
+           which is ~flat (≈ σ² dt) for slow modes (γ_k dt << 1) and
+           ~k^-2 (→ 2 V_k) for fast modes (γ_k dt >> 1). This is the
+           correct ground truth for the validation harness, since the
+           pipeline runs PCA on daily changes, not levels.
+           """
+        var_inc = 2 * self.stationary_variance * (1 - np.exp(-self.decay_rates * self.config.dt))
+        var_inc = var_inc / var_inc.sum()
+        return var_inc[:n_components]
 
 
 class StochasticHeatEquation2D:
@@ -297,19 +314,3 @@ def generate_synthetic_dataset(
         "returns": returns,
         "config": config,
     }
-def theoretical_implement_eigenvalues(self, n_components: int) -> np.ndarray:
-    """Theoretical spectrum for PCA on DAILY CHANGES (returns).
-
-       The k^-2 law describes the stationary variance of mode LEVELS.
-       Increments of an OU process obey a different law:
-
-           Var(Δf_k) = 2 V_k (1 - exp(-γ_k dt)),   V_k = σ²/(2γ_k)
-
-       which is ~flat (≈ σ² dt) for slow modes (γ_k dt << 1) and
-       ~k^-2 (→ 2 V_k) for fast modes (γ_k dt >> 1). This is the
-       correct ground truth for the validation harness, since the
-       pipeline runs PCA on daily changes, not levels.
-       """
-    var_inc = 2 * self.stationary_variance * (1 - np.exp(-self.decay_rate * self.config.dt))
-    var_inc = var_inc / var_inc.sum()
-    return var_inc[:n_components]

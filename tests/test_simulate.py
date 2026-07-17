@@ -2,6 +2,8 @@
 
 import numpy as np
 import pytest
+
+from src.pca import run_pca
 from src.simulate import StochasticHeatEquation, SPDEConfig, generate_synthetic_dataset
 
 
@@ -74,6 +76,18 @@ class TestStochasticHeatEquation:
                 else:
                     assert abs(inner) < 0.15
 
+    def test_pca_recovers_increment_spectrum(self):
+        """PCA on daily changes must match the OU increment-variance theory,
+        Var(Δf_k) ∝ 2 V_k (1 - exp(-γ_k dt)) — NOT the naive k^-2 law."""
+        cfg = SPDEConfig(D=0.05, n_z=50, seed=42)  # mean mode off by default
+        spde = StochasticHeatEquation(cfg)
+        surface = spde.simulate(20000)
+        pca = run_pca(np.diff(surface, axis=0), n_components=10)
+        theory = spde.theoretical_increment_eigenvalues(10)
+        np.testing.assert_allclose(
+            pca.explained_variance_ratio, theory, atol=0.012
+        )
+
 
 class TestGenerateSyntheticDataset:
     def test_output_keys(self):
@@ -88,3 +102,5 @@ class TestGenerateSyntheticDataset:
         assert dataset["surface"].shape == (200, 30)
         assert dataset["returns"].shape == (199, 30)
         assert len(dataset["z_grid"]) == 30
+
+
