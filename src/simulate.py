@@ -73,6 +73,7 @@ class SPDEConfig:
     noise_amplitude: float = 1.0
     dt: float = 1.0
     seed: int | None = 42
+    include_mean_mode: bool = False  # extra slow "market level" mode; OFF for the clean harness
 
 
 class StochasticHeatEquation:
@@ -296,3 +297,19 @@ def generate_synthetic_dataset(
         "returns": returns,
         "config": config,
     }
+def theoretical_implement_eigenvalues(self, n_components: int) -> np.ndarray:
+    """Theoretical spectrum for PCA on DAILY CHANGES (returns).
+
+       The k^-2 law describes the stationary variance of mode LEVELS.
+       Increments of an OU process obey a different law:
+
+           Var(Δf_k) = 2 V_k (1 - exp(-γ_k dt)),   V_k = σ²/(2γ_k)
+
+       which is ~flat (≈ σ² dt) for slow modes (γ_k dt << 1) and
+       ~k^-2 (→ 2 V_k) for fast modes (γ_k dt >> 1). This is the
+       correct ground truth for the validation harness, since the
+       pipeline runs PCA on daily changes, not levels.
+       """
+    var_inc = 2 * self.stationary_variance * (1 - np.exp(-self.decay_rate * self.config.dt))
+    var_inc = var_inc / var_inc.sum()
+    return var_inc[:n_components]
