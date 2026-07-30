@@ -1,10 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from simulate_spde import simulate
+from src.simulate import StochasticHeatEquation
 
 # 1. Generate the synthetic surface. We KNOW its ground truth (built from
 #    cosine modes with eigenvalues ~ 1/k^2), so it's the perfect test case.
-z, p, gt = simulate_surface(seed=0)
+equation = StochasticHeatEquation()
+z, p, gt = equation.simulate(n_days=500)
 
 # p has shape (n_days, n_z): each ROW is one day's surface across moneyness z.
 print("p shape (days, z):", p.shape)

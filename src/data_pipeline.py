@@ -68,9 +68,9 @@ class ReparamConfig:
         ('daily', 'intraday', ...). A documented modelling choice, not a detail.
     """
     psi: float = 25.0
-    z_min: float = -3.0
-    z_max: float = 3.0
-    n_z_bins: int = 30
+    z_min: float = -0.85
+    z_max: float = 0.85
+    n_z_bins: int = 20
     n_tau_bins: int = 10
     hedge_frequency: str = "daily"
 
@@ -241,17 +241,44 @@ def load_options_data(filepath: str) -> pd.DataFrame:
     return df
 
 
-def load_optionmetrics(*args, **kwargs) -> pd.DataFrame:
-    """Load equity-option surfaces from WRDS / OptionMetrics (IvyDB).
+def load_optionmetrics(
+    surface_path: str = "E:/Projects/vol-surface-dynamics/data/raw/spx_vsurface.parquet",
+    spot_path: str = "E:/Projects/vol-surface-dynamics/data/raw/spx_spot.parquet",
+    otm_only: bool = True,
+) -> pd.DataFrame:
+    """Load SPX smoothed vol surfaces (IvyDB vsurfd) into pipeline schema.
 
-    The cleanest path to real equity surfaces if your institution subscribes.
-    Map the IvyDB schema onto the columns expected by ``load_options_data``.
-
-    TODO (Phase 1): implement once a data source is secured.
+    Decisions (see README): vendor impl_strike as the strike (D1);
+    OTM-only stitching via |delta| <= 0.5 (D2); calendar->business
+    days via 252/365 (D3); usable z-range ~[-0.85, 0.85] (D4).
     """
-    raise NotImplementedError(
-        "OptionMetrics/IvyDB loader — implement in Phase 1 once WRDS access is set up."
-    )
+    surf = pd.read_parquet(surface_path)
+    spot = pd.read_parquet(spot_path)
+
+    for d in (surf, spot):
+        d["date"] = pd.to_datetime(d["date"])
+
+    df = surf.merge(spot, on="date", how="inner")
+
+    df = df.rename(columns={
+        "impl_strike": "strike",
+        "impl_volatility": "implied_vol",
+        "impl_premium": "mid_price",
+        "cp_flag": "option_type",
+    })
+
+    df["ttoexp"] = df["days"] * (252 / 365)
+
+    if otm_only:
+        df = df[df["delta"].abs() <= 50]
+
+    df = df.dropna(subset=["strike", "implied_vol", "spot"])
+
+    return df[
+        ["date", "spot", "strike", "ttoexp",
+         "mid_price", "option_type",
+         "implied_vol", "delta"]
+    ].reset_index(drop=True)
 
 
 def load_deribit(*args, **kwargs) -> pd.DataFrame:

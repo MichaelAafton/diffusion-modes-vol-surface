@@ -22,12 +22,15 @@ env/
 *.ipynb_metadata/
 
 # Data (too large for git) — keep the directory structure, ignore the contents
+data/raw/
 data/raw/*
+data/raw/*.parquet
 data/processed/*
 data/synthetic/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/synthetic/.gitkeep
+.pgpass
 
 # OS
 .DS_Store
@@ -42,3 +45,6 @@ report/*.aux
 report/*.log
 report/*.out
 report/*.synctex.gz
+
+# pytest cache
+.pytest_cache/
