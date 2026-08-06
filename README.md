@@ -115,7 +115,7 @@ git clone https://github.com/michaelaafton/diffusion-modes-vol-surface.git
 cd diffusion-modes-vol-surface
 
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+source .venv/bin/activate        # Windows: .venv\scripts\activate
 
 pip install -r requirements.txt
 pip install -e .
@@ -151,6 +151,33 @@ theory = spde.theoretical_increment_eigenvalues(10)
   `ψ ≈ 20–30` business days, matching the intuition that 1m-vs-2m feels larger than 1y-vs-2y.
 - **Delta-hedged P&L** requires a chosen **hedging frequency**. This is a modelling decision
   that injects both noise and bias into every downstream number; it is documented, not buried.
+
+## Design decisions
+D1. Strike from impl_strike, not from inverting delta. Two roads to z: 
+analytically invert the Black–Scholes delta formula, or trust the vendor's impl_strike. 
+Take the vendor's. Reason: their inversion used the exact same model, rates, and dividend assumptions that produced the surface
+— self-consistent by construction. Rolling your own risks a subtle mismatch that would masquerade as structure in your spectrum.
+
+D2. Put/call stitching: keep OTM only. At every strike two options exist (put and call), but market information lives in the liquid one, 
+which is the out-of-the-money one. The clean rule: keep rows with |delta| ≤ 0.50 — that keeps OTM puts (which populate z < 0, the crash side) and OTM calls (z > 0, the rally side), 
+meeting at the money. One continuous moneyness axis, each half from its liquid representative. Make it a flag (otm_only=True) so the choice is visible, not buried.
+The grid is 10–90 and the filter keeps 18 pillars per maturity.
+
+D3. Calendar days → business days. Surface days are calendar days; your pipeline (and BDAYS_PER_YEAR = 252) thinks in business days. 
+Convert: ttoexp = days × 252/365. Miss this and every √T is silently wrong by √(365/252) ≈ 1.20 — a 20% distortion of the z-axis that would corrupt the spectrum while looking perfectly plausible. 
+This is the classic quiet-unit-bug of options work.
+
+D4. The z-range shrinks — and that's a finding, not a bug. Here's something the repo's config doesn't know yet. 
+Deltas ±0.20…±0.80 translate to z spanning roughly ±0.85 (a 0.20-delta option sits about 0.84 standard deviations OTM — the delta and the z-quantile are near-mirrors). 
+But ReparamConfig defaults to z ∈ [−3, 3]! On real surface data most of that domain is empty. So: for real data, 
+construct ReparamConfig(z_min=-0.85, z_max=0.85, n_z_bins=20) (≈13 pillars per side per maturity → ~20 bins is honest resolution, not fake precision). 
+Physics consequence worth writing down now: the accessible z-window sets the longest wavelength — and hence which modes k you can resolve. 
+The deep wings (crash tail) would need the raw per-option file (opprcd), a possible later extension. This is essentially the same as documenting an instrument's field of view.
+
+D5. Panel variable: implied vol, differenced; not delta-hedged P&L. PCA input is Δσ(z) day-over-day. 
+Rationale: (i) stationarity — levels are near-random-walk; (ii) matches the harness's validated increment theory; (iii) avoids importing a hedging-frequency assumption (see hedge_frequency note) into the measurement stage. 
+Caveat: daily Δσ at fixed z differs from delta-hedged P&L by gamma–theta carry terms, which are approximately a rank-one contamination concentrated in the leading mode, so mode-1 interpretation carries an asterisk;
+modes ≥ 2 are robust. Future robustness check: vega-weighted panel.
 
 ## Data sources
 

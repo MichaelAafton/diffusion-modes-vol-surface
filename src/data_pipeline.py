@@ -44,6 +44,7 @@ downstream. It is a modelling decision to document, captured here in
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
+import warnings
 
 # Time-scaling constant. Implied vol is annualized; maturities here are handled in
 # business days, so convert to years with this factor for the √T moneyness scaling.
@@ -68,9 +69,9 @@ class ReparamConfig:
         ('daily', 'intraday', ...). A documented modelling choice, not a detail.
     """
     psi: float = 25.0
-    z_min: float = -0.85
-    z_max: float = 0.85
-    n_z_bins: int = 20
+    z_min: float = -1.15
+    z_max: float = 1.10
+    n_z_bins: int = 8
     n_tau_bins: int = 10
     hedge_frequency: str = "daily"
 
@@ -190,16 +191,30 @@ def preprocess_options_data(
     df = df.copy()
     df["T_years"] = df["ttoexp"].values / BDAYS_PER_YEAR
 
-    # Annualized implied vol as the normalising σ (use √VSW if available).
+    # Real data carries a per-(date, maturity) ATM vol; synthetic data does not. z is normalized by the ATM vol when available
+    if "sigma_atm" not in df.columns:
+        raise KeyError(
+            "sigma_atm missing — did load_optionmetrics include it in "
+            "the returned columns? (Synthetic harness: pass a df with "
+            "sigma_atm set to implied_vol.)"
+        )
+
+
     df["z"] = compute_moneyness(
         df["strike"].values,
         df["spot"].values,
-        df["implied_vol"].values,
+        df["sigma_atm"].values,
         df["T_years"].values,
     )
     df["tau"] = compute_psychological_time(df["ttoexp"].values, psi=config.psi)
 
     mask = (df["z"] >= config.z_min) & (df["z"] <= config.z_max)
+    kept = df[mask]
+    lost = 1 - len(kept) / len(df)
+    if lost > 0.02:
+        warnings.warn(f"z-clip dropped {lost:.1%} of rows "
+                      f"(range [{config.z_min}, {config.z_max}])")
+    return kept.reset_index(drop=True)
     return df[mask].reset_index(drop=True)
 
 
@@ -268,6 +283,14 @@ def load_optionmetrics(
     })
 
     df["ttoexp"] = df["days"] * (252 / 365)
+    atm = (
+        df[np.isclose(df["delta"].abs(), 50)]
+        .groupby(["date", "days"])["implied_vol"]
+        .mean()
+        .rename("sigma_atm")
+        .reset_index()
+    )
+    df = df.merge(atm, on=["date", "days"], how="inner")
 
     if otm_only:
         df = df[df["delta"].abs() <= 50]
@@ -275,13 +298,13 @@ def load_optionmetrics(
     df = df.dropna(subset=["strike", "implied_vol", "spot"])
 
     return df[
-        ["date", "spot", "strike", "ttoexp",
+        ["days", "date", "spot", "strike", "ttoexp",
          "mid_price", "option_type",
-         "implied_vol", "delta"]
+         "implied_vol", "sigma_atm", "delta"]
     ].reset_index(drop=True)
 
 
-def load_deribit(*args, **kwargs) -> pd.DataFrame:
+'''def load_deribit(*args, **kwargs) -> pd.DataFrame:
     """Load BTC/ETH option history from Deribit's public API.
 
     Free, several years of liquid crypto-option history; bridges to a later
@@ -306,7 +329,7 @@ def load_yfinance_snapshot(*args, **kwargs) -> pd.DataFrame:
     """
     raise NotImplementedError(
         "yfinance snapshot — implement as a sanity check; not a basis for the study."
-    )
+    )'''
 
 
 def compute_delta_hedged_pnl_series(
@@ -326,3 +349,32 @@ def compute_delta_hedged_pnl_series(
         "Delta-hedged P&L series — implement in Phase 1/2; document the hedging "
         "frequency assumption explicitly."
     )
+
+
+def build_surface_panel(
+    df: pd.DataFrame,
+    config: ReparamConfig,
+    min_coverage: float = 0.95,
+) -> dict:
+    """Day x z-bin panel of implied vol at a fixed maturity slice.
+
+    Bins each option's z into config's grid, averages implied_vol
+    per (date, bin), pivots to a (n_days, n_bins) matrix. Bins with
+    < min_coverage fill across days are dropped (no interpolation:
+    invented data would leak smoothness into the spectrum), then
+    remaining incomplete days are dropped.
+    """
+    edges = np.linspace(config.z_min, config.z_max, config.n_z_bins + 1)
+    centers = 0.5 * (edges[:-1] + edges[1:])
+    df = df.copy()
+    df["z_bin"] = pd.cut(df["z"], edges, labels=False)
+
+    panel = (df.groupby(["date", "z_bin"])["implied_vol"]
+               .mean().unstack("z_bin"))
+
+    keep = panel.notna().mean(axis=0) >= min_coverage   # per-bin fill rate
+    panel = panel.loc[:, keep].dropna(axis=0)
+
+    return {"panel": panel,                    # DataFrame: days x bins
+            "z_centers": centers[keep.values],
+            "n_bins_dropped": int((~keep).sum())}
