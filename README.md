@@ -168,16 +168,23 @@ Convert: ttoexp = days × 252/365. Miss this and every √T is silently wrong by
 This is the classic quiet-unit-bug of options work.
 
 D4. The z-range shrinks — and that's a finding, not a bug. Here's something the repo's config doesn't know yet. 
-Deltas ±0.20…±0.80 translate to z spanning roughly ±0.85 (a 0.20-delta option sits about 0.84 standard deviations OTM — the delta and the z-quantile are near-mirrors). 
+Deltas ±0.20…±0.80 translate to z spanning roughly ±1.15 (a 0.20-delta option sits about 0.84 standard deviations OTM — the delta and the z-quantile are near-mirrors). 
 But ReparamConfig defaults to z ∈ [−3, 3]! On real surface data most of that domain is empty. So: for real data, 
-construct ReparamConfig(z_min=-0.85, z_max=0.85, n_z_bins=20) (≈13 pillars per side per maturity → ~20 bins is honest resolution, not fake precision). 
+construct ReparamConfig(z_min=-1.15, z_max=1.10, n_z_bins=8)  
 Physics consequence worth writing down now: the accessible z-window sets the longest wavelength — and hence which modes k you can resolve. 
 The deep wings (crash tail) would need the raw per-option file (opprcd), a possible later extension. This is essentially the same as documenting an instrument's field of view.
 
 D5. Panel variable: implied vol, differenced; not delta-hedged P&L. PCA input is Δσ(z) day-over-day. 
-Rationale: (i) stationarity — levels are near-random-walk; (ii) matches the harness's validated increment theory; (iii) avoids importing a hedging-frequency assumption (see hedge_frequency note) into the measurement stage. 
+Rationale: (i) stationarity — levels are near-random-walk; (ii) matches the harness's validated increment theory; (iii) avoids importing a hedging_frequency assumption (see hedge_frequency note) into the measurement stage. 
 Caveat: daily Δσ at fixed z differs from delta-hedged P&L by gamma–theta carry terms, which are approximately a rank-one contamination concentrated in the leading mode, so mode-1 interpretation carries an asterisk;
 modes ≥ 2 are robust. Future robustness check: vega-weighted panel.
+
+D6 — Phase 3 results & specification. PCA on daily Δσ panel (2499×8, full coverage). 
+Headline: mode 1 = level (91.5%, 0 nodes), mode 2 = skew see-saw (1 node), spectrum slope p = 2.99 vs diffusive prediction 2. 
+Robustness (deep-put bin excluded): p = 3.20, modes 1–2 unchanged ⇒ stiffness anomaly is specification-stable. 
+Mode 3 rejected as membrane harmonic: edge-following dipole, node count unstable (2→4) under bin removal. 
+Corrections during analysis: (i) earlier "(2498, 7), 1 bin dropped" panel was an artifact of object-dtype null semantics — clean-dtype truth is full coverage; dtype now guaranteed at panel construction + pytest. 
+(ii) Predicted smooth curvature mode 3 falsified by edge-tracking diagnostic. Node-counting evidence stops at mode 2 by design, not oversight.
 
 ## Data sources
 

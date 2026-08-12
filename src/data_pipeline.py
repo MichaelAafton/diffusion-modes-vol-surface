@@ -264,8 +264,8 @@ def load_optionmetrics(
     """Load SPX smoothed vol surfaces (IvyDB vsurfd) into pipeline schema.
 
     Decisions (see README): vendor impl_strike as the strike (D1);
-    OTM-only stitching via |delta| <= 0.5 (D2); calendar->business
-    days via 252/365 (D3); usable z-range ~[-0.85, 0.85] (D4).
+    OTM-only stitching via |delta| <= 50 (D2); calendar->business
+    days via 252/365 (D3); usable z-range ~[-1.15, 1.10] (D4).
     """
     surf = pd.read_parquet(surface_path)
     spot = pd.read_parquet(spot_path)
@@ -281,6 +281,9 @@ def load_optionmetrics(
         "impl_premium": "mid_price",
         "cp_flag": "option_type",
     })
+
+    num_cols = ["spot", "strike", "implied_vol", "mid_price", "delta", "days"]
+    df[num_cols] = df[num_cols].apply(pd.to_numeric, errors="coerce")
 
     df["ttoexp"] = df["days"] * (252 / 365)
     atm = (
@@ -370,11 +373,14 @@ def build_surface_panel(
     df["z_bin"] = pd.cut(df["z"], edges, labels=False)
 
     panel = (df.groupby(["date", "z_bin"])["implied_vol"]
-               .mean().unstack("z_bin"))
+               .mean().unstack("z_bin").astype(float))
+
+    coverage = panel.notna().mean(axis=0)
 
     keep = panel.notna().mean(axis=0) >= min_coverage   # per-bin fill rate
     panel = panel.loc[:, keep].dropna(axis=0)
 
     return {"panel": panel,                    # DataFrame: days x bins
             "z_centers": centers[keep.values],
-            "n_bins_dropped": int((~keep).sum())}
+            "n_bins_dropped": int((~keep).sum()),
+            "coverage": coverage}
