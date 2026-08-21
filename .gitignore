@@ -48,3 +48,7 @@ report/*.synctex.gz
 
 # pytest cache
 .pytest_cache/
+
+#Visual
+figures/*.gif
+figures/*.mp4

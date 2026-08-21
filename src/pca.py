@@ -228,3 +228,17 @@ def project_onto_factors(
     returns_standardised = returns_centered / stds
 
     return returns_standardised @ eigenvectors.T
+
+'''def slope(evr, floor=1e-10):
+    evr = np.asarray(evr)
+    k = np.arange(1, len(evr) + 1)
+    m = evr > floor
+    return -np.polyfit(np.log(k[m]), np.log(evr[m]), 1)[0]'''
+def slope(evr, floor=1e-10, k_start=1):
+    evr = np.asarray(evr)
+    k = np.arange(k_start, k_start + len(evr))
+    m = evr > floor
+    return -np.polyfit(np.log(k[m]), np.log(evr[m]), 1)[0]
+
+def sign_changes(v):
+    return int(np.sum(np.diff(np.sign(v)) != 0))

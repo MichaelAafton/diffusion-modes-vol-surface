@@ -72,7 +72,10 @@ class SPDEConfig:
     noise_amplitude: float = 1.0
     dt: float = 1.0
     seed: int | None = 42
+    kappa: float = 0.0
     include_mean_mode: bool = False  # extra slow "market level" mode; OFF for the clean harness
+    mean_mode_decay_rate: float = 0.002  # per day; ≈ old default D*0.01 at D=0.2
+    mean_mode_noise_std: float = 0.5  # daily kick size of the level factor
 
 
 class StochasticHeatEquation:
@@ -99,11 +102,12 @@ class StochasticHeatEquation:
 
         # Wavenumbers for modes k = 1, 2, ..., n_modes
         # (k=0 is the mean/constant mode, handled separately)
-        self.k_values = np.arange(1, config.n_modes + 1)
-        self.wavenumbers = self.k_values * np.pi / self.L
+        self.k = np.arange(1, config.n_modes + 1)
+        self.wavenumbers = self.k * np.pi / self.L
 
         # Decay rates for each mode: γₖ = D * (kπ/L)²
-        self.decay_rates = config.D * self.wavenumbers ** 2
+        # was: self.decay_rates = config.D * self.wavenumbers ** 2
+        self.decay_rates = config.D * self.k ** 2 + config.kappa * self.k ** 4
 
         # Stationary variance of each mode: σ²_noise / (2γₖ)
         self.stationary_variance = (
@@ -115,7 +119,7 @@ class StochasticHeatEquation:
         # The √(2/L) normalisation makes them orthonormal
         z_shifted = self.z_grid - config.z_min
         self.basis_functions = np.zeros((config.n_modes, config.n_z))
-        for i, k in enumerate(self.k_values):
+        for i, k in enumerate(self.k):
             self.basis_functions[i, :] = np.sqrt(2 / self.L) * np.cos(
                 k * np.pi * z_shifted / self.L
             )
@@ -153,8 +157,8 @@ class StochasticHeatEquation:
 
         # Also track a slowly-varying mean (mode 0)
         f_mean = 0.0
-        mean_decay = np.exp(-cfg.D * 0.01 * dt)  # very slow decay for mean
-        mean_noise_std = cfg.noise_amplitude * np.sqrt(dt) * 0.5
+        mean_decay = np.exp(-cfg.mean_mode_decay_rate * dt)
+        mean_noise_std = cfg.mean_mode_noise_std * np.sqrt(dt)
 
         # Storage for output
         surface = np.zeros((n_days, cfg.n_z))

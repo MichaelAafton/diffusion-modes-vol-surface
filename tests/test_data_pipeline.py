@@ -81,6 +81,7 @@ class TestPreprocess:
                 "mid_price": [8.0, 2.0, 0.01],
                 "option_type": ["call", "call", "call"],
                 "implied_vol": [0.2, 0.2, 0.2],
+                "sigma_atm": [0.2, 0.2, 0.2],
             }
         )
         out = preprocess_options_data(df, ReparamConfig(z_min=-3.0, z_max=3.0))
