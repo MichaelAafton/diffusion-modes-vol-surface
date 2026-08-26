@@ -37,6 +37,7 @@ Status: scaffolding. Implement once Phases 1–4 are complete.
 import numpy as np
 from dataclasses import dataclass
 from scipy.optimize import minimize  # noqa: F401  (used once fitting is implemented)
+from src.simulate import StochasticHeatEquation, SPDEConfig
 
 
 @dataclass
@@ -97,3 +98,46 @@ def fit_field_theory(
     then run it per asset class and *report cross-asset differences honestly*.
     """
     raise NotImplementedError("Field-theory fitting — implement in Phase 5.")
+
+def model_spectrum(D, kappa, mean_inc_var, n_z=8,
+                   z_min=-1.15, z_max=1.10, dt=1.0):
+    """Exact variance shares of daily changes under the composite model.
+
+    Covariance of increments, built from the OU increment law
+    Var(dF_k) = 2 V_k (1 - exp(-gamma_k dt)) on the sampled cosine
+    basis, plus a uniform level-factor increment variance. Correlation-
+    normalised (matching run_pca), eigendecomposed, returned as shares.
+    """
+    cfg = SPDEConfig(D=D, kappa=kappa, n_z=n_z, n_modes=n_z,
+                     z_min=z_min, z_max=z_max)
+    spde = StochasticHeatEquation(cfg)
+
+    w = 2.0 * spde.stationary_variance * (
+        1.0 - np.exp(-spde.decay_rates * dt))          # per-mode increment var
+    Phi = spde.basis_functions                          # (n_modes, n_z)
+    cov = Phi.T @ np.diag(w) @ Phi + mean_inc_var       # (n_z, n_z)
+
+    d = np.sqrt(np.diag(cov))
+    corr = cov / np.outer(d, d)
+
+    eig = np.linalg.eigvalsh(corr)[::-1]                # descending
+    return eig / eig.sum()
+
+print(model_spectrum(D=0.2, kappa=0.02, mean_inc_var=3.35**2))
+
+def fit_composite(target, sigma, x0=(0.2, 0.02, 11.2)):
+    """Fit (D, kappa, mean_inc_var) to a spectrum by weighted least squares.
+
+    Fits log-parameters (positivity, scale-symmetric); modes 1-7 only
+    (mode 8 is determined by the sum-to-one constraint). Returns dict
+    with best-fit params and chi2 (dof = 7 - 3 = 4).
+    """
+    def chi2(logp):
+        D, kappa, m = np.exp(logp)
+        model = model_spectrum(D, kappa, m)
+        return np.sum(((model[:7] - target[:7]) / sigma[:7]) ** 2)
+
+    res = minimize(chi2, np.log(x0), method="Nelder-Mead")
+    D, kappa, m = np.exp(res.x)
+    return {"D": D, "kappa": kappa, "mean_inc_var": m,
+            "chi2": res.fun, "success": res.success}

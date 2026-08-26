@@ -186,18 +186,25 @@ Mode 3 rejected as membrane harmonic: edge-following dipole, node count unstable
 Corrections during analysis: (i) earlier "(2498, 7), 1 bin dropped" panel was an artifact of object-dtype null semantics — clean-dtype truth is full coverage; dtype now guaranteed at panel construction + pytest. 
 (ii) Predicted smooth curvature mode 3 falsified by edge-tracking diagnostic. Node-counting evidence stops at mode 2 by design, not oversight.
 
-D7: Spectral adjudication (Phase 4)
+D7. Spectral adjudication (Phase 4).
 Candidate operators compared via matched-instrument sweeps: identical 8-bin grid on [−1.15, 1.10], 2500-day horizon, daily differencing, correlation-matrix PCA, and slope estimator for synthetic and real data. 5 seeds per cell.
  -Diffusion-only (κ = 0): falsified twice. Full-spectrum slope saturates at p ≤ 1.78 and tail slope at p ≤ 1.87 across the D sweep, vs real p = 2.99–3.20 (full) and 2.53–2.64 (tail).
  -Single k⁴ operator: slope-sufficient (κ ≈ 0.2–0.3 reproduces full p ≈ 3) but profile-falsified: synthetic spectra are concave on log-log (p_tail > p_full), real is convex (p_tail < p_full); mode-2 share off by 6×.
  -Composite = external level factor + membrane (D = 0.2, κ ≈ 0.02, k* ≈ 3, crossover inside the observable band): reproduces the 8-point profile. Mode-1 share 0.9182 ± 0.0022 vs real 0.9150 (+1.5σ); rank-7 degeneracy filled, mode 8 = 0.0012 ± 0.0001 vs real 0.0014, untuned agreement. 
-   Residuals (z-scores vs seed spread): mode-2 deficit −7.8σ; mode-3–4 excess +31σ / +9.6σ; missing mode-4–5 shelf (real 0.0067 -> 0.0064 flat; model cascades), mode 5 −10.5σ; modes 6–8 mildly starved (−4 to −8σ), consistent with tail slightly too steep (synthetic p_tail 2.72 ± 0.02 vs real 2.53–2.64), κ marginally high, deferred to formal calibration (Phase 5).
+  Residuals (z-scores vs seed spread): mode-2 deficit −7.8σ; mode-3–4 excess +31σ / +9.6σ; missing mode-4–5 shelf (real 0.0067 -> 0.0064 flat; model cascades), mode 5 −10.5σ; modes 6–8 mildly starved (−4 to −8σ), consistent with tail slightly too steep (synthetic p_tail 2.72 ± 0.02 vs real 2.53–2.64), κ marginally high, deferred to formal calibration (Phase 5).
+  However, with block-bootstrap errors on the real spectrum, residual significance shrinks to mode-4 +3.2σ and the 4–5 shelf; mode-3 excess not significant.
  -Caveats: shares sum to 1, so residual z-scores are not independent; the denominator is synthetic seed-spread only (real-spectrum estimation error not yet included), so significance is overstated. Establishes sufficiency, not uniqueness, other mechanisms (fat-tailed noise, non-stationarity) could reproduce a finite-resolution spectrum.
 Methodological notes
  -Aliasing: simulated modes matched to grid resolution (n_modes = n_z); coarse sampling of extra modes would fold high-k variance into low modes and spuriously steepen slopes.
  -Underflow guard: re-derived rather than raised, exp underflow (a→0) is the benign exact-update limit (mode redraws from its stationary law); guard replaced with a finiteness assert.
  -Mode-1 inflation: the level factor inflates apparent stiffness by ~10× (full-slope match demanded κ ≈ 0.2–0.3; tail-only demands κ ≈ 0.02), motivating tail-slope analysis as the operator-sensitive statistic.
  -Prediction ledger: modes 6–8 predicted within ±2σ, observed −4 to −8σ (explained by global tail steepness); 4–5 shelf predicted missing, confirmed.
+
+D8. Formal calibration (Phase 5). Analytic forward model: exact increment-covariance Φᵀdiag(2Vₖ(1−e^(−γₖdt)))Φ + m, correlation-normalised, eigendecomposed: validated against simulation to within seed noise. 
+Real-spectrum uncertainty via moving-block bootstrap (block 25 d, 1000 replicates); with these errors, D7's seed-only z-scores collapse (mode-3 "+31σ" → +1.9σ, not significant). Fit: weighted χ² on modes 1–7 (mode 8 sum-determined), log-parameters, Nelder–Mead; errors by bootstrap-refit. 
+Result: D = 0.69 [0.29, 1.25], κ = 0.011 [0.006, 0.020], level kick σ = 2.64 [2.25, 3.35], k* = 7.9 [5.1, 11.2] - crossover at the top of the observable band. Hand-fit (D = 0.2, κ = 0.02) rejected: Δχ² = 17.1, D was never fitted by hand, and the optimiser traded 3.5× more diffusion against half the bending. 
+corr(log D, log κ) = +0.32: parameters separately identified, CIs honestly wide. χ²/dof = 3.6; sole significant residual: mode-5 deficit z = −3.0 - the real 4-5 shelf, unreproducible by any smooth level+operator composite; leading candidate for future work (mode 8 z = +2.3, unfitted, noted). 
+Prediction ledger: flat-valley hypothesis rejected by the data; predicted D–κ degeneracy (+0.6–0.9) not observed; predicted surviving mode-4 residual absorbed by the fit.
 ## Data sources
 
 Deep historical full-surface options data is expensive. Viable routes, in order of
