@@ -205,6 +205,12 @@ Real-spectrum uncertainty via moving-block bootstrap (block 25 d, 1000 replicate
 Result: D = 0.69 [0.29, 1.25], κ = 0.011 [0.006, 0.020], level kick σ = 2.64 [2.25, 3.35], k* = 7.9 [5.1, 11.2] - crossover at the top of the observable band. Hand-fit (D = 0.2, κ = 0.02) rejected: Δχ² = 17.1, D was never fitted by hand, and the optimiser traded 3.5× more diffusion against half the bending. 
 corr(log D, log κ) = +0.32: parameters separately identified, CIs honestly wide. χ²/dof = 3.6; sole significant residual: mode-5 deficit z = −3.0 - the real 4-5 shelf, unreproducible by any smooth level+operator composite; leading candidate for future work (mode 8 z = +2.3, unfitted, noted). 
 Prediction ledger: flat-valley hypothesis rejected by the data; predicted D–κ degeneracy (+0.6–0.9) not observed; predicted surviving mode-4 residual absorbed by the fit.
+
+D9. Out-of-sample factor-risk test (Phase 6). Chronological split: train 2015-01-05 → 2022-01-05 (1748 changes), test 2022-01-06 → 2024-12-31 (750). 
+Models compared on predicted vs realised variance of four vega-sketch portfolios (level, straddle, risk-reversal, butterfly); all structured models share train per-bin stds, so the contest is correlation structure only. 
+Results: (i) common scale factor ~0.44–0.65 across structured models, train contains COVID-2020, test regime calmer; dynamic variance rescaling out of scope, logged as future work. (ii) Diagonal baseline fails two-sided: under-predicts level risk 3.1× (discards correlation mass that summing portfolios collect), over-predicts spread risk 6–14× (misses cancellation in long-short weights). 
+(iii) Field theory (3 parameters) matches the empirical 3-factor model (36 numbers) to ≤1% on level, straddle, and risk-reversal; insensitive to empirical factor count (3 vs 5 identical; 1-factor fails RR — mode 2 carries real skew risk). (iv) Butterfly: field theory over-predicts ~2.2× (0.49 vs empirical 1.10), the portfolio loading precisely modes 3–5, where D8 catalogued the calibration residuals (3–4 excess, 5 deficit). 
+Independent money-terms rediscovery of the spectral shelf: the defect is a property of the surface, not of the fit. Prediction ledger: "all ratios > 1" wrong (COVID-in-train); "equal-weight insensitive to structure" wrong (most sensitive); spread-direction diagonal failure and ~1% field-empirical agreement (predicted at 20%) right.
 ## Data sources
 
 Deep historical full-surface options data is expensive. Viable routes, in order of

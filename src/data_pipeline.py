@@ -211,9 +211,9 @@ def preprocess_options_data(
     mask = (df["z"] >= config.z_min) & (df["z"] <= config.z_max)
     kept = df[mask]
     lost = 1 - len(kept) / len(df)
-    if lost > 0.02:
+    '''if lost > 0.02:
         warnings.warn(f"z-clip dropped {lost:.1%} of rows "
-                      f"(range [{config.z_min}, {config.z_max}])")
+                      f"(range [{config.z_min}, {config.z_max}])")'''
     return kept.reset_index(drop=True)
     return df[mask].reset_index(drop=True)
 

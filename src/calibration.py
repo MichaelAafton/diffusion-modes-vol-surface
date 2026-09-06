@@ -99,31 +99,58 @@ def fit_field_theory(
     """
     raise NotImplementedError("Field-theory fitting — implement in Phase 5.")
 
-def model_spectrum(D, kappa, mean_inc_var, n_z=8,
-                   z_min=-1.15, z_max=1.10, dt=1.0):
+def model_spectrum(
+    D,
+    kappa,
+    mean_inc_var,
+    n_z=8,
+    z_min=-1.15,
+    z_max=1.10,
+    dt=1.0,
+    return_corr=False,
+):
     """Exact variance shares of daily changes under the composite model.
 
     Covariance of increments, built from the OU increment law
-    Var(dF_k) = 2 V_k (1 - exp(-gamma_k dt)) on the sampled cosine
-    basis, plus a uniform level-factor increment variance. Correlation-
-    normalised (matching run_pca), eigendecomposed, returned as shares.
+
+        Var(dF_k) = 2 V_k (1 - exp(-gamma_k dt))
+
+    on the sampled cosine basis, plus a uniform level-factor
+    increment variance.
+
+    By default, returns the correlation-normalised eigenvalue
+    shares, matching ``run_pca``.
+
+    If ``return_corr=True``, returns the 8x8 correlation matrix
+    itself instead.
     """
-    cfg = SPDEConfig(D=D, kappa=kappa, n_z=n_z, n_modes=n_z,
-                     z_min=z_min, z_max=z_max)
+    cfg = SPDEConfig(
+        D=D,
+        kappa=kappa,
+        n_z=n_z,
+        n_modes=n_z,
+        z_min=z_min,
+        z_max=z_max,
+    )
+
     spde = StochasticHeatEquation(cfg)
 
     w = 2.0 * spde.stationary_variance * (
-        1.0 - np.exp(-spde.decay_rates * dt))          # per-mode increment var
-    Phi = spde.basis_functions                          # (n_modes, n_z)
-    cov = Phi.T @ np.diag(w) @ Phi + mean_inc_var       # (n_z, n_z)
+        1.0 - np.exp(-spde.decay_rates * dt)
+    )  # per-mode increment variance
+
+    Phi = spde.basis_functions  # (n_modes, n_z)
+
+    cov = Phi.T @ np.diag(w) @ Phi + mean_inc_var
 
     d = np.sqrt(np.diag(cov))
     corr = cov / np.outer(d, d)
 
-    eig = np.linalg.eigvalsh(corr)[::-1]                # descending
-    return eig / eig.sum()
+    if return_corr:
+        return corr
 
-print(model_spectrum(D=0.2, kappa=0.02, mean_inc_var=3.35**2))
+    eig = np.linalg.eigvalsh(corr)[::-1]  # descending
+    return eig / eig.sum()
 
 def fit_composite(target, sigma, x0=(0.2, 0.02, 11.2)):
     """Fit (D, kappa, mean_inc_var) to a spectrum by weighted least squares.

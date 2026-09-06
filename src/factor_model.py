@@ -261,3 +261,43 @@ def svi_baseline_risk(*args, **kwargs) -> float:
     raise NotImplementedError(
         "SVI baseline — implement in Phase 6 as the comparison benchmark."
     )
+
+"""Factor risk models for the z-bin dSigma panel, + out-of-sample test."""
+
+
+def train_test_split(changes, train_frac=0.7):
+    n = int(len(changes) * train_frac)
+    return changes[:n], changes[n:]
+
+
+def empirical_factor_cov(train, n_factors=3):
+    """PCA-truncated covariance + diagonal residual top-up."""
+    c = np.cov(train, rowvar=False)
+    lam, V = np.linalg.eigh(c)
+    lam, V = lam[::-1], V[:, ::-1]                     # descending
+    recon = (V[:, :n_factors] * lam[:n_factors]) @ V[:, :n_factors].T
+    resid = np.diag(np.diag(c) - np.diag(recon))       # keep per-bin totals
+    return recon + resid
+
+
+def field_theory_cov(train, corr_model):
+    """Physics correlations, train-data units."""
+    s = train.std(axis=0, ddof=1)
+    return np.outer(s, s) * corr_model
+
+
+def diagonal_cov(train):
+    return np.diag(train.var(axis=0, ddof=1))
+
+
+def portfolio_report(covs: dict, test, portfolios: dict):
+    """Realised OOS variance vs each model's prediction, per portfolio."""
+    rows = []
+    for pname, w in portfolios.items():
+        w = np.asarray(w, float)
+        realised = np.var(test @ w, ddof=1)
+        row = {"portfolio": pname, "realised": realised}
+        for mname, S in covs.items():
+            row[mname] = realised / (w @ S @ w)        # ratio: 1 = perfect
+        rows.append(row)
+    return rows
