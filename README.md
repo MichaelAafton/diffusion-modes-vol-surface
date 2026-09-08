@@ -6,41 +6,60 @@ A physics / data-science / quantitative-finance research project that asks a sin
 honest question: *does the option volatility surface really move like a diffusive
 membrane — and where does that picture break?*
 
-Inspired by Pavel **Ioselevich** (Capital Fund Management), *A Data-Driven Factor Model
-for Option Risk*, and building on the elastic-string models of **Le Coz & Bouchaud**.
+Inspired by an unpublished presentation by Pavel **Ioselevich** (Capital Fund Management),
+*A Data-Driven Factor Model for Option Risk*, and building on the elastic-string models of
+**Le Coz & Bouchaud**.
+
+**Full write-up:** [`report/report.pdf`](report/report.pdf)
 
 ---
+
+## Key results (SPX, 2015–2024, OptionMetrics IvyDB)
+
+- **Pure diffusion is falsified.** Through a matched instrument (identical grid, horizon,
+  differencing and estimator for synthetic and real data), no diffusion constant reaches the
+  observed spectrum: synthetic slopes saturate at `p ≤ 1.87` vs real tail slopes of `2.53–2.64`.
+- **A 3-parameter composite works:** an external volatility-level factor (91.5% of daily-change
+  variance) riding on a membrane with tension *and* bending rigidity, `γₖ = Dk² + κk⁴`.
+  Calibrated with block-bootstrap errors: `D = 0.69 [0.29, 1.25]`, `κ = 0.011 [0.006, 0.020]`,
+  crossover `k* = 7.9 [5.1, 11.2]` at the top of the observable band (`χ²/dof = 3.6`).
+- **Out of sample (train ≤ 2022-01-05, test 2022–2024):** the 3-parameter field theory predicts
+  portfolio risk within **1%** of a 36-number empirical factor model on level, straddle and
+  risk-reversal exposures. A butterfly portfolio — loading exactly modes 3–5 — exposes the
+  model's one significant spectral residual (the mode-4–5 "shelf") in money terms, over-predicted 2.2×.
+- **The honest part:** the shelf is measured twice by independent routes (spectral fit `z = −3.0`;
+  butterfly ratio) and reported as the leading open feature, not smoothed over.
 
 ## The idea in one paragraph
 
 Option markets quote a 2D surface of implied volatilities across strikes and maturities.
-If you reparameterize that surface into standard-deviation moneyness `z` and a compressed
-"psychological time" `τ`, the daily co-movement of delta-hedged P&Ls looks suspiciously
-like the dynamics of a **stochastic heat equation** — the same PDE that governs diffusion
-in physics. This project builds the full pipeline (data → delta-hedged P&L → PCA →
-eigenmodes → field-theory fit → factor model) and tests that hypothesis. The deliverable
-is a small, validated factor model for option-portfolio risk together with an honest
-account of where the diffusive picture holds and where it fails.
+Reparameterized into standard-deviation moneyness `z`, the daily co-movement of implied-vol
+changes `Δσ(z)` looks suspiciously like the dynamics of a **stochastic heat equation** — the
+same PDE that governs diffusion in physics. This project builds the full pipeline
+(data → (z, τ) panel → PCA → eigenmodes → field-theory calibration → factor model) and tests
+that hypothesis. The deliverable is a small, validated factor model for option-portfolio risk
+together with an honest account of where the diffusive picture holds and where it fails.
 
 ## The reframe (why this project is structured the way it is)
 
 A naive version of this study has a fatal flaw: if you *generate* data from a stochastic
 heat equation and then "discover" that it has the eigenstructure of a stochastic heat
-equation, you have proved nothing — you put the answer in. A clean `λ_k ~ k⁻²` fit on
-synthetic data is a **unit test of the simulator**, not a finding.
+equation, you have proved nothing — you put the answer in. A clean fit on synthetic data is
+a **unit test of the simulator**, not a finding.
 
 So the roles are inverted on purpose:
 
 - **Synthetic data is the validation harness.** It exists only to prove the pipeline
-  recovers known ground truth (sinusoidal modes, `λ_k ~ k⁻²`, the correct diffusion
-  constant `D`). This belongs in *methodology*, labelled as exactly that.
+  recovers known ground truth — and the correct ground truth for PCA on *daily changes* is
+  the OU increment spectrum `2Vₖ(1−e^(−γₖdt))`, not the naive `k⁻²` level law (see below).
+  This belongs in *methodology*, labelled as exactly that.
 - **Real options data is the actual study.** The research contribution is precisely
   *where real surfaces match the diffusive-membrane picture and where they deviate from
   it.* The deviations are the result, not a failure.
 
-> *"The first three modes match the heat-equation prediction, but the eigenvalue tail
-> departs from `k⁻²` because real skew has non-diffusive structure"* is a far stronger,
-> more credible sentence than any clean fit on simulated data.
+> *"The level and skew modes are membrane-like, but the spectrum falls steeper than
+> diffusion allows — and the excess is quantitatively consistent with bending rigidity"*
+> is a far stronger, more credible sentence than any clean fit on simulated data.
 
 ## Background you need (and where to get it)
 
@@ -55,7 +74,7 @@ You need working intuition, not mastery, in four areas:
 | **PCA** | Eigendecomposition of the return correlation matrix; eigenvectors are independent modes of variation, eigenvalues their variance share. | StatQuest / any linear-algebra text |
 | **The heat equation** | `∂ₜu = D ∂²ₓu`; on a finite domain its eigenfunctions are sinusoidal with eigenvalues `~ k²`. | Bouchaud & Potters |
 
-**The physics connection.** If vol-surface returns obey a stochastic heat equation
+**The physics connection.** If vol-surface perturbations obey a stochastic heat equation
 
 ```
 ∂ₜ p(z,t) = D ∂²_z p(z,t) + ξ(z,t)            (ξ = white noise)
@@ -63,8 +82,11 @@ You need working intuition, not mastery, in four areas:
 
 then decomposing in Fourier modes `p = Σ fₖ cos(kz)` makes each mode an
 Ornstein–Uhlenbeck process `∂ₜfₖ = −D k² fₖ + ξₖ(t)` with stationary variance `~ 1/k²`.
-The k^-2 law describes stationary variance for mode levels; PCA on daily changes sees the increment spectrum - 2Vₖ(1−e^(−γₖdt)) - flat for slow modes,
-k^-2 for fast ones, and it is this corrected prediction the validation harness tests.
+**But** the `k⁻²` law describes the stationary variance of mode *levels*; PCA on daily
+*changes* sees the increment spectrum `2Vₖ(1−e^(−γₖdt))` — flat for slow modes, `k⁻²` for
+fast ones — and it is this corrected prediction the validation harness tests. Getting this
+distinction right materially changes the conclusions; see `tests/test_simulate.py` and
+Sec. 2 of the report.
 
 ## Repository structure
 
@@ -76,22 +98,25 @@ diffusion-modes-vol-surface/
 ├── setup.py
 │
 ├── src/                          # reusable library (tools, not the study)
-│   ├── simulate.py               # stochastic heat-equation simulator (validation harness)
+│   ├── simulate.py               # SPDE simulator: exact OU updates, D k² + κ k⁴ operator
 │   ├── black_scholes.py          # BS pricing, Greeks, IV inversion, delta-hedged P&L
-│   ├── data_pipeline.py          # load real + synthetic data; (z, τ) reparameterization
-│   ├── pca.py                    # PCA, rolling-window stability, factor projection
+│   ├── data_pipeline.py          # WRDS/IvyDB loader; (z, τ) reparameterization; panel builder
+│   ├── pca.py                    # PCA, slope estimators, factor projection
 │   ├── heat_equation.py          # analytical Fourier modes, λ_k scaling, mode overlap
-│   ├── calibration.py            # field-theory (κ, μ) calibration
-│   ├── factor_model.py           # PCA-based portfolio risk model
-│   └── plotting.py               # consistent, publication-quality figures
+│   ├── calibration.py            # analytic forward model + weighted χ² fit of (D, κ, m)
+│   ├── factor_model.py           # covariance models + out-of-sample portfolio risk test
+│   └── plotting.py               # consistent figures
 │
-├── notebooks/                    # narrative: synthetic harness vs real data, compared
-│   ├── 01_data.ipynb             # Phase 1 — validation harness, then real data
-│   ├── 02_reparam.ipynb          # Phase 2 — (z, τ) reparameterization (with the √T fix)
-│   ├── 03_pca.ipynb              # Phase 3 — PCA on both, side by side
-│   ├── 04_physics.ipynb          # Phase 4 — eigenvalue scaling; where it deviates
-│   ├── 05_field_theory.ipynb     # Phase 5 — fit (κ, μ); universality as a question
-│   └── 06_factor_model.ipynb     # Phase 6 — factor model + out-of-sample test
+├── scripts/                      # the study itself, in execution order
+│   ├── pull_wrds.py              # one-time WRDS pull (SPX secid 108105, 2015–2024)
+│   ├── build_panel.py            # day × z-bin implied-vol panel
+│   ├── run_pca_real.py           # Phase 3: empirical spectrum, slopes, mode shapes
+│   ├── adjudicate_p.py           # Phase 4: matched-instrument operator sweeps
+│   ├── fingerprint_composite.py  # Phase 4: composite model vs real 8-point spectrum
+│   ├── bootstrap_real_spectrum.py# Phase 5: block-bootstrap errors on the real spectrum
+│   ├── fit_real_spectrum.py      # Phase 5: formal calibration with bootstrap-refit CIs
+│   ├── oos_risk_test.py          # Phase 6: out-of-sample portfolio risk test
+│   └── make_figures.py           # report figures
 │
 ├── tests/                        # unit tests, incl. the synthetic-recovery harness
 │   ├── test_simulate.py
@@ -99,13 +124,15 @@ diffusion-modes-vol-surface/
 │   ├── test_data_pipeline.py
 │   └── test_pca.py
 │
-├── data/                         # data lives here (contents git-ignored)
+├── data/                         # data lives here (contents git-ignored — licensed)
 │   ├── raw/                      # raw options data (real)
-│   ├── processed/                # cleaned data in (z, τ) coordinates
+│   ├── processed/                # bootstrap outputs, processed panels
 │   └── synthetic/                # simulator output (the validation harness)
 │
-└── report/                       # written report (10–15 pages)
-    └── README.md                 # report outline; report.pdf goes here
+└── report/                       # the written paper
+    ├── report.pdf                # compiled report (10 pages)
+    ├── report.tex                # LaTeX source
+    └── figures/                  # spectrum, mode shapes, OOS ratios
 ```
 
 ## Getting started
@@ -115,148 +142,183 @@ git clone https://github.com/michaelaafton/diffusion-modes-vol-surface.git
 cd diffusion-modes-vol-surface
 
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\scripts\activate
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
 pip install -r requirements.txt
 pip install -e .
 ```
 
-Run the validation harness (synthetic recovery) and the test suite:
+Run the test suite (includes the synthetic-recovery harness):
 
 ```bash
-pytest                           # unit tests, including synthetic recovery
-jupyter lab notebooks/           # work through 01 → 06
+pytest
 ```
+
+The validation harness in five lines — simulate known ground truth, confirm the pipeline
+recovers the *correct* (increment-law) spectrum:
 
 ```python
-# The validation harness: simulate known ground truth, confirm the pipeline recovers it.
-from src.simulate import generate_synthetic_dataset
+import numpy as np
+from src.simulate import StochasticHeatEquation, SPDEConfig
 from src.pca import run_pca
 
-data = generate_synthetic_dataset(n_days=2000, D=0.05, n_z=50, seed=42)
-pca = run_pca(data["returns"], n_components=10)
-theory = spde.theoretical_increment_eigenvalues(10)
-# PCA runs on DAILY CHANGES, so the correct ground truth is the OU
-# increment spectrum Var(Δf_k) ∝ 2V_k(1 − exp(−γ_k dt)):
-# ~flat for slow modes, → k⁻² for fast ones. See tests/test_simulate.py.
+spde = StochasticHeatEquation(SPDEConfig(D=0.05, n_z=50, seed=42))
+surface = spde.simulate(20_000)
+pca = run_pca(np.diff(surface, axis=0), n_components=10)   # PCA on DAILY CHANGES
+theory = spde.theoretical_increment_eigenvalues(10)         # 2Vₖ(1 − exp(−γₖ dt))
+# empirical and theory agree to <0.2 pp per mode; frozen in tests/test_simulate.py
 ```
+
+Real-data pipeline: run `scripts/pull_wrds.py` once (requires WRDS credentials; raw data
+lands in `data/raw/`, git-ignored under licence), then the scripts in the order listed above.
 
 ## Conventions (state them explicitly — they matter)
 
-- **Moneyness** uses standard-deviation-to-expiry scaling:
-  `z = log(K/S) / (σ·√T)`. The `√T` is *not* optional — implied vol `σ` is annualized, so
-  without it `z` is not comparable across maturities and the whole `τ`-dimension analysis is
-  distorted. (Equivalently: scale by total implied variance over the option's life.)
+- **Moneyness** uses standard-deviation-to-expiry scaling with an ATM ruler:
+  `z = log(K/S) / (σ_ATM·√T)`. The `√T` is *not* optional — implied vol is annualized, so
+  without it `z` is not comparable across maturities. The *ATM* vol (not each option's own
+  vol) is essential: normalising by own-vol makes the coordinate self-referential (D4).
 - **Psychological time** compresses the maturity axis: `τ = ψ·log(1 + T/ψ)` with
-  `ψ ≈ 20–30` business days, matching the intuition that 1m-vs-2m feels larger than 1y-vs-2y.
+  `ψ ≈ 20–30` business days. (This study uses the 30-calendar-day slice; the τ-dimension
+  is deferred future work.)
 - **Delta-hedged P&L** requires a chosen **hedging frequency**. This is a modelling decision
-  that injects both noise and bias into every downstream number; it is documented, not buried.
+  that injects both noise and bias into every downstream number; the study side-steps it by
+  measuring `Δσ` directly (D5), and documents the resulting gamma–theta caveat.
 
-## Design decisions
-D1. Strike from impl_strike, not from inverting delta. Two roads to z: 
-analytically invert the Black–Scholes delta formula, or trust the vendor's impl_strike. 
-Take the vendor's. Reason: their inversion used the exact same model, rates, and dividend assumptions that produced the surface
-— self-consistent by construction. Rolling your own risks a subtle mismatch that would masquerade as structure in your spectrum.
+## Design decisions (D-log)
 
-D2. Put/call stitching: keep OTM only. At every strike two options exist (put and call), but market information lives in the liquid one, 
-which is the out-of-the-money one. The clean rule: keep rows with |delta| ≤ 0.50 — that keeps OTM puts (which populate z < 0, the crash side) and OTM calls (z > 0, the rally side), 
-meeting at the money. One continuous moneyness axis, each half from its liquid representative. Make it a flag (otm_only=True) so the choice is visible, not buried.
-The grid is 10–90 and the filter keeps 18 pillars per maturity.
+**D1. Strike from vendor `impl_strike`, not from inverting delta.** The vendor's inversion
+used the same model, rates and dividend assumptions that produced the surface —
+self-consistent by construction. Rolling your own risks a subtle mismatch that would
+masquerade as structure in the spectrum.
 
-D3. Calendar days → business days. Surface days are calendar days; your pipeline (and BDAYS_PER_YEAR = 252) thinks in business days. 
-Convert: ttoexp = days × 252/365. Miss this and every √T is silently wrong by √(365/252) ≈ 1.20 — a 20% distortion of the z-axis that would corrupt the spectrum while looking perfectly plausible. 
-This is the classic quiet-unit-bug of options work.
+**D2. Put/call stitching: keep OTM only.** At every strike two options exist, but market
+information lives in the liquid, out-of-the-money one. Rule: keep `|delta| ≤ 0.50` — OTM
+puts populate `z < 0` (crash side), OTM calls `z > 0` (rally side), meeting at the money.
+One continuous moneyness axis, each half from its liquid representative; exposed as a flag
+(`otm_only=True`) so the choice is visible. The pillar grid runs `|Δ| ∈ [0.10, 0.90]` in
+steps of 0.05; the OTM filter keeps 9 pillars per side (18 per maturity).
 
-D4. The z-range shrinks — and that's a finding, not a bug. Here's something the repo's config doesn't know yet. 
-Deltas ±0.20…±0.80 translate to z spanning roughly ±1.15 (a 0.20-delta option sits about 0.84 standard deviations OTM — the delta and the z-quantile are near-mirrors). 
-But ReparamConfig defaults to z ∈ [−3, 3]! On real surface data most of that domain is empty. So: for real data, 
-construct ReparamConfig(z_min=-1.15, z_max=1.10, n_z_bins=8)  
-Physics consequence worth writing down now: the accessible z-window sets the longest wavelength — and hence which modes k you can resolve. 
-The deep wings (crash tail) would need the raw per-option file (opprcd), a possible later extension. This is essentially the same as documenting an instrument's field of view.
+**D3. Calendar days → business days.** Surface maturities are calendar days; the pipeline
+(and `BDAYS_PER_YEAR = 252`) thinks in business days. Convert: `ttoexp = days × 252/365`.
+Miss this and every `√T` is silently wrong by `√(365/252) ≈ 1.20` — a ~17% compression of
+the z-axis that corrupts the spectrum while looking perfectly plausible.
 
-D5. Panel variable: implied vol, differenced; not delta-hedged P&L. PCA input is Δσ(z) day-over-day. 
-Rationale: (i) stationarity — levels are near-random-walk; (ii) matches the harness's validated increment theory; (iii) avoids importing a hedging_frequency assumption (see hedge_frequency note) into the measurement stage. 
-Caveat: daily Δσ at fixed z differs from delta-hedged P&L by gamma–theta carry terms, which are approximately a rank-one contamination concentrated in the leading mode, so mode-1 interpretation carries an asterisk;
-modes ≥ 2 are robust. Future robustness check: vega-weighted panel.
+**D4. The usable z-window is an instrument property: `[−1.15, 1.10]`, 8 bins.** The IvyDB
+delta-pillar grid, with z normalised by the per-(date, maturity) σ_ATM (wing vols exceed
+ATM vol, stretching the put side), maps to this asymmetric window; 13.3% of raw rows
+(nearly all deep OTM puts) fall outside it. Pillar spacing supports ≈8 uniform bins —
+finer binning would manufacture resolution the instrument does not possess. The accessible
+window sets which modes k are resolvable (k ≲ 8); the deep crash wing would need the raw
+per-option file (`opprcd`), a possible extension. This is documenting an instrument's
+field of view.
 
-D6. Phase 3 results & specification. PCA on daily Δσ panel (2499×8, full coverage). 
-Headline: mode 1 = level (91.5%, 0 nodes), mode 2 = skew see-saw (1 node), spectrum slope p = 2.99 vs diffusive prediction 2. 
-Robustness (deep-put bin excluded): p = 3.20, modes 1–2 unchanged ⇒ stiffness anomaly is specification-stable. 
-Mode 3 rejected as membrane harmonic: edge-following dipole, node count unstable (2→4) under bin removal. 
-Corrections during analysis: (i) earlier "(2498, 7), 1 bin dropped" panel was an artifact of object-dtype null semantics — clean-dtype truth is full coverage; dtype now guaranteed at panel construction + pytest. 
-(ii) Predicted smooth curvature mode 3 falsified by edge-tracking diagnostic. Node-counting evidence stops at mode 2 by design, not oversight.
+**D5. Panel variable: implied vol, differenced — not delta-hedged P&L.** PCA input is
+`Δσ(z)` day-over-day. Rationale: (i) stationarity — levels are near-random-walk;
+(ii) matches the harness-validated increment theory; (iii) avoids importing a
+hedging-frequency assumption into the measurement stage. Caveat: daily `Δσ` differs from
+delta-hedged P&L by gamma–theta carry, approximately a rank-one contamination concentrated
+in the leading mode — mode-1 interpretation carries an asterisk; modes ≥ 2 are robust.
+Future robustness check: vega-weighted panel.
 
-D7. Spectral adjudication (Phase 4).
-Candidate operators compared via matched-instrument sweeps: identical 8-bin grid on [−1.15, 1.10], 2500-day horizon, daily differencing, correlation-matrix PCA, and slope estimator for synthetic and real data. 5 seeds per cell.
- -Diffusion-only (κ = 0): falsified twice. Full-spectrum slope saturates at p ≤ 1.78 and tail slope at p ≤ 1.87 across the D sweep, vs real p = 2.99–3.20 (full) and 2.53–2.64 (tail).
- -Single k⁴ operator: slope-sufficient (κ ≈ 0.2–0.3 reproduces full p ≈ 3) but profile-falsified: synthetic spectra are concave on log-log (p_tail > p_full), real is convex (p_tail < p_full); mode-2 share off by 6×.
- -Composite = external level factor + membrane (D = 0.2, κ ≈ 0.02, k* ≈ 3, crossover inside the observable band): reproduces the 8-point profile. Mode-1 share 0.9182 ± 0.0022 vs real 0.9150 (+1.5σ); rank-7 degeneracy filled, mode 8 = 0.0012 ± 0.0001 vs real 0.0014, untuned agreement. 
-  Residuals (z-scores vs seed spread): mode-2 deficit −7.8σ; mode-3–4 excess +31σ / +9.6σ; missing mode-4–5 shelf (real 0.0067 -> 0.0064 flat; model cascades), mode 5 −10.5σ; modes 6–8 mildly starved (−4 to −8σ), consistent with tail slightly too steep (synthetic p_tail 2.72 ± 0.02 vs real 2.53–2.64), κ marginally high, deferred to formal calibration (Phase 5).
-  However, with block-bootstrap errors on the real spectrum, residual significance shrinks to mode-4 +3.2σ and the 4–5 shelf; mode-3 excess not significant.
- -Caveats: shares sum to 1, so residual z-scores are not independent; the denominator is synthetic seed-spread only (real-spectrum estimation error not yet included), so significance is overstated. Establishes sufficiency, not uniqueness, other mechanisms (fat-tailed noise, non-stationarity) could reproduce a finite-resolution spectrum.
-Methodological notes
- -Aliasing: simulated modes matched to grid resolution (n_modes = n_z); coarse sampling of extra modes would fold high-k variance into low modes and spuriously steepen slopes.
- -Underflow guard: re-derived rather than raised, exp underflow (a→0) is the benign exact-update limit (mode redraws from its stationary law); guard replaced with a finiteness assert.
- -Mode-1 inflation: the level factor inflates apparent stiffness by ~10× (full-slope match demanded κ ≈ 0.2–0.3; tail-only demands κ ≈ 0.02), motivating tail-slope analysis as the operator-sensitive statistic.
- -Prediction ledger: modes 6–8 predicted within ±2σ, observed −4 to −8σ (explained by global tail steepness); 4–5 shelf predicted missing, confirmed.
+**D6. Phase-3 results & specification.** PCA on the daily `Δσ` panel (2499×8, full
+coverage). Headline: mode 1 = level (91.5%, 0 nodes), mode 2 = skew see-saw (1 node);
+spectrum slopes p = 2.99 (8-bin) / 3.20 (edge bin excluded), tail slopes 2.53 / 2.64.
+Mode 3 rejected as a membrane harmonic: edge-following dipole, node count unstable (2→4)
+under bin removal. Corrections during analysis: (i) an earlier "(2498, 7), 1 bin dropped"
+panel was an artifact of object-dtype null semantics — clean-dtype truth is full coverage;
+dtypes now guaranteed at panel construction + pytest. (ii) A predicted smooth curvature
+mode 3 was falsified by the edge-tracking diagnostic. Node-counting evidence stops at
+mode 2 by diagnosis, not oversight.
 
-D8. Formal calibration (Phase 5). Analytic forward model: exact increment-covariance Φᵀdiag(2Vₖ(1−e^(−γₖdt)))Φ + m, correlation-normalised, eigendecomposed: validated against simulation to within seed noise. 
-Real-spectrum uncertainty via moving-block bootstrap (block 25 d, 1000 replicates); with these errors, D7's seed-only z-scores collapse (mode-3 "+31σ" → +1.9σ, not significant). Fit: weighted χ² on modes 1–7 (mode 8 sum-determined), log-parameters, Nelder–Mead; errors by bootstrap-refit. 
-Result: D = 0.69 [0.29, 1.25], κ = 0.011 [0.006, 0.020], level kick σ = 2.64 [2.25, 3.35], k* = 7.9 [5.1, 11.2] - crossover at the top of the observable band. Hand-fit (D = 0.2, κ = 0.02) rejected: Δχ² = 17.1, D was never fitted by hand, and the optimiser traded 3.5× more diffusion against half the bending. 
-corr(log D, log κ) = +0.32: parameters separately identified, CIs honestly wide. χ²/dof = 3.6; sole significant residual: mode-5 deficit z = −3.0 - the real 4-5 shelf, unreproducible by any smooth level+operator composite; leading candidate for future work (mode 8 z = +2.3, unfitted, noted). 
-Prediction ledger: flat-valley hypothesis rejected by the data; predicted D–κ degeneracy (+0.6–0.9) not observed; predicted surviving mode-4 residual absorbed by the fit.
+**D7. Spectral adjudication (Phase 4).** Candidate operators compared via
+matched-instrument sweeps (identical 8-bin grid on [−1.15, 1.10], 2500-day horizon, daily
+differencing, correlation-matrix PCA and slope estimator; 5 seeds/cell).
+Diffusion-only (κ=0): falsified twice — slopes saturate at p ≤ 1.78 (full) and ≤ 1.87
+(tail) vs real 2.99–3.20 / 2.53–2.64. Single k⁴ operator: slope-sufficient but
+profile-falsified — synthetic spectra are concave on log-log (p_tail > p_full), real is
+convex; mode-2 share off 6×. Composite (external level factor + membrane): reproduces the
+8-point profile, including the untuned mode-8 agreement (level factor fills the rank-7
+sampling degeneracy: 0.0012 ± 0.0001 vs real 0.0014). With block-bootstrap errors on the
+real spectrum, residual significance shrinks to the mode-4–5 shelf region; the seed-only
+"+31σ mode-3 excess" collapses to +1.9σ (not significant) — *seed spread is not
+measurement error*. Methodological notes: aliasing control (`n_modes = n_z`); underflow
+guard re-derived (exp underflow is the benign exact-update limit); mode-1 dominance
+inflates apparent stiffness ~10× (full-slope match demanded κ ≈ 0.2–0.3; tail-only ≈ 0.02),
+motivating tail-slope analysis as the operator-sensitive statistic.
 
-D9. Out-of-sample factor-risk test (Phase 6). Chronological split: train 2015-01-05 → 2022-01-05 (1748 changes), test 2022-01-06 → 2024-12-31 (750). 
-Models compared on predicted vs realised variance of four vega-sketch portfolios (level, straddle, risk-reversal, butterfly); all structured models share train per-bin stds, so the contest is correlation structure only. 
-Results: (i) common scale factor ~0.44–0.65 across structured models, train contains COVID-2020, test regime calmer; dynamic variance rescaling out of scope, logged as future work. (ii) Diagonal baseline fails two-sided: under-predicts level risk 3.1× (discards correlation mass that summing portfolios collect), over-predicts spread risk 6–14× (misses cancellation in long-short weights). 
-(iii) Field theory (3 parameters) matches the empirical 3-factor model (36 numbers) to ≤1% on level, straddle, and risk-reversal; insensitive to empirical factor count (3 vs 5 identical; 1-factor fails RR — mode 2 carries real skew risk). (iv) Butterfly: field theory over-predicts ~2.2× (0.49 vs empirical 1.10), the portfolio loading precisely modes 3–5, where D8 catalogued the calibration residuals (3–4 excess, 5 deficit). 
-Independent money-terms rediscovery of the spectral shelf: the defect is a property of the surface, not of the fit. Prediction ledger: "all ratios > 1" wrong (COVID-in-train); "equal-weight insensitive to structure" wrong (most sensitive); spread-direction diagonal failure and ~1% field-empirical agreement (predicted at 20%) right.
+**D8. Formal calibration (Phase 5).** Analytic forward model — exact increment covariance
+`Φᵀ diag(2Vₖ(1−e^(−γₖdt))) Φ + m`, correlation-normalised, eigendecomposed — validated
+against simulation to within seed noise. Real-spectrum uncertainty via moving-block
+bootstrap (block 25 d, 1000 replicates). Fit: weighted χ² on modes 1–7 (mode 8
+sum-determined), log-parameters, Nelder–Mead; CIs by bootstrap-refit. **Result:
+D = 0.69 [0.29, 1.25], κ = 0.011 [0.006, 0.020], level kick √m = 2.64 [2.25, 3.35],
+k\* = 7.9 [5.1, 11.2]** — crossover at the top of the observable band. Hand-fit
+(D=0.2, κ=0.02) rejected: Δχ² = 17.1 (D was never fitted by hand). corr(log D, log κ) =
++0.32: parameters separately identified, CIs honestly wide. χ²/dof = 3.6; sole significant
+residual: mode-5 deficit z = −3.0 — the real 4–5 shelf, unreproducible by any smooth
+level+operator composite (mode-8 z = +2.3, unfitted, noted). Prediction ledger:
+flat-valley hypothesis rejected; predicted strong D–κ degeneracy not observed; predicted
+surviving mode-4 residual absorbed by the fit.
+
+**D9. Out-of-sample factor-risk test (Phase 6).** Chronological split: train 2015-01-05 →
+2022-01-05 (1748 changes, COVID in-sample), test 2022-01-06 → 2024-12-31 (750). Predicted
+vs realised variance of four vega-sketch portfolios; all structured models share train
+per-bin stds, so the contest is correlation structure only. Results: (i) common scale
+factor ~0.44–0.65 (train contains COVID-2020, test calmer; dynamic rescaling = future
+work); (ii) diagonal baseline fails two-sided — 3.1× under on level, 6–14× over on
+spreads; (iii) **field theory (3 parameters) matches the empirical 3-factor model
+(36 numbers) to ≤1%** on level, straddle and risk-reversal, insensitive to factor count
+(1-factor fails the risk reversal — mode 2 carries real skew risk); (iv) butterfly:
+field theory over-predicts 2.2× — the portfolio loads precisely modes 3–5, independently
+rediscovering the D8 spectral shelf in money terms. Prediction ledger: "all ratios > 1"
+wrong (COVID-in-train); "equal-weight insensitive to structure" wrong (most sensitive);
+spread-direction diagonal failure and field-empirical agreement right (agreement predicted
+at 20%, delivered at 1%).
+
 ## Data sources
 
-Deep historical full-surface options data is expensive. Viable routes, in order of
-preference:
+Deep historical full-surface options data is expensive. This study uses route 1:
 
 1. **WRDS / OptionMetrics (IvyDB)** — the standard academic source for historical equity
-   implied vols and Greeks; free if your institution subscribes. Cleanest path to real
-   equity surfaces.
-2. **Deribit BTC/ETH options** — free public API, several years of liquid crypto-option
-   history. Younger and weirder than equity index, which makes the "where does the membrane
-   break?" question *more* interesting.
-3. **yfinance** — current chains only, *not* deep history; fine for a snapshot sanity check,
-   insufficient to drive the time-series PCA at the core of this project.
+   implied vols and Greeks; free if your institution subscribes. Used here: SPX smoothed
+   surfaces (`vsurfd`) + spot (`secprd`), secid 108105, 2015–2024, pulled once to Parquet.
+2. **Deribit BTC/ETH options** — free public API; a future cross-asset test of the
+   "where does the membrane break?" question.
+3. **yfinance** — current chains only; insufficient for time-series PCA.
 
-## Roadmap
+## Project history
 
-| Weeks | Phase | What happens | Key module |
-|------:|-------|--------------|------------|
-| 1–2 | Prep | Options, implied vol, PCA, heat equation, delta-hedging mechanics | — |
-| 3 | **1** | Synthetic validation harness; secure + load a real data source | `simulate.py`, `data_pipeline.py` |
-| 3–4 | **2** | `(z, τ)` reparameterization with the √T fix; document conventions | `data_pipeline.py` |
-| 4–5 | **3** | Identical PCA on synthetic and real; reproduce + compare key plots | `pca.py` |
-| 5–7 | **4** | Eigenvalue scaling `λₖ ~ k⁻ᵅ`, Fourier overlap — *quantify the deviation* | `heat_equation.py` |
-| 7–8 | **5** | Field-theory calibration `(κ, μ)`; test universality across assets | `calibration.py` |
-| 8–9 | **6** | Factor model + out-of-sample validation on real data vs an SVI baseline | `factor_model.py` |
-| 9–10 | Polish | Report, code cleanup, README | — |
+| Phase | What happened | Key module |
+|------:|---------------|------------|
+| **1** | Synthetic validation harness (exact OU; increment-law correction frozen as pytest); WRDS data secured and loaded | `simulate.py`, `data_pipeline.py` |
+| **2** | `(z, τ)` reparameterization with σ_ATM ruler and documented conventions; day × z-bin panel | `data_pipeline.py` |
+| **3** | PCA on real data: level + skew modes, mode-3 edge artifact diagnosed, slope anomaly found | `pca.py` |
+| **4** | Matched-instrument adjudication: diffusion falsified; level-factor + bending composite sufficient | `simulate.py` (κk⁴ operator) |
+| **5** | Analytic forward model; block-bootstrap errors; formal (D, κ, m) fit with CIs | `calibration.py` |
+| **6** | Out-of-sample portfolio risk vs empirical-factor and diagonal baselines | `factor_model.py` |
+
+**Deferred (honest list):** rolling-window mode stability; the τ-dimension / 2D membrane;
+vega-weighted panel robustness; dynamic variance rescaling; deep wings via `opprcd`;
+cross-asset universality as a question, not a claim.
 
 ## Status / key results
 
-Results are filled in honestly as each phase completes. The synthetic recovery is a
-*validation step*; the headline results come from real data, deviations included.
-
-- [ ] **Phase 1** — Synthetic harness recovers ground truth; real data acquired and loaded
-- [ ] **Phase 2** — `(z, τ)` reparameterization with documented conventions
-- [ ] **Phase 3** — PCA eigenmodes & spectra, synthetic vs real, side by side
-- [ ] **Phase 4** — Power-law exponent `α` for both sources; where real surfaces leave `k⁻²`
-- [ ] **Phase 5** — `(κ, μ)` fit with confidence intervals; the universality question
-- [ ] **Phase 6** — Out-of-sample factor-model risk vs realised, vs SVI baseline
+- [x] **Phase 1** — Harness recovers the (corrected) increment-law ground truth; SPX data loaded
+- [x] **Phase 2** — `(z, τ)` panel: 2499 days × 8 bins, full coverage, decisions D1–D5 logged
+- [x] **Phase 3** — Modes 1–2 membrane-like; mode 3 = edge artifact; tail slope 2.53–2.64
+- [x] **Phase 4** — Diffusion falsified (p ≤ 1.87); composite level + `Dk²+κk⁴` reproduces the spectrum
+- [x] **Phase 5** — D = 0.69 [0.29, 1.25], κ = 0.011 [0.006, 0.020], k\* = 7.9 [5.1, 11.2]; χ²/dof = 3.6
+- [x] **Phase 6** — Field theory within 1% of empirical factor model OOS; butterfly localises the shelf
 
 ## References
 
-- Ioselevich, P. — *A Data-Driven Factor Model for Option Risk*.
-- Le Coz, V. & Bouchaud, J.-P. — Elastic-string models for forward rates.
-- Gatheral, J. — *The Volatility Surface: A Practitioner's Guide*.
-- Bouchaud, J.-P. & Potters, M. — *Theory of Financial Risk and Derivative Pricing*.
-- Hull, J. — *Options, Futures, and Other Derivatives*.
+- Bouchaud, J.-P. and Potters, M. (2003) *Theory of financial risk and derivative pricing*. 2nd edn. Cambridge: Cambridge University Press.
+- Cont, R. and da Fonseca, J. (2002) 'Dynamics of implied volatility surfaces', *Quantitative Finance*, 2(1), pp. 45–60.
+- Gatheral, J. (2006) *The volatility surface: a practitioner's guide*. Hoboken, NJ: John Wiley & Sons.
+- Le Coz, V. and Bouchaud, J.-P. (2024) 'Revisiting elastic string models of forward interest rates', *Quantitative Finance*, 24, pp. 1561–1578.
+- Ioselevich, P. — *A Data-Driven Factor Model for Option Risk* (unpublished presentation, Capital Fund Management).
+- Hull, J. — *Options, Futures, and Other Derivatives* (background).
 
 ## License
 
