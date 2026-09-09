@@ -102,10 +102,7 @@ diffusion-modes-vol-surface/
 │   ├── black_scholes.py          # BS pricing, Greeks, IV inversion, delta-hedged P&L
 │   ├── data_pipeline.py          # WRDS/IvyDB loader; (z, τ) reparameterization; panel builder
 │   ├── pca.py                    # PCA, slope estimators, factor projection
-│   ├── heat_equation.py          # analytical Fourier modes, λ_k scaling, mode overlap
 │   ├── calibration.py            # analytic forward model + weighted χ² fit of (D, κ, m)
-│   ├── factor_model.py           # covariance models + out-of-sample portfolio risk test
-│   └── plotting.py               # consistent figures
 │
 ├── scripts/                      # the study itself, in execution order
 │   ├── pull_wrds.py              # one-time WRDS pull (SPX secid 108105, 2015–2024)
@@ -115,8 +112,9 @@ diffusion-modes-vol-surface/
 │   ├── fingerprint_composite.py  # Phase 4: composite model vs real 8-point spectrum
 │   ├── bootstrap_real_spectrum.py# Phase 5: block-bootstrap errors on the real spectrum
 │   ├── fit_real_spectrum.py      # Phase 5: formal calibration with bootstrap-refit CIs
-│   ├── oos_risk_test.py          # Phase 6: out-of-sample portfolio risk test
-│   └── make_figures.py           # report figures
+│   ├── oos_risk.py               # Phase 6: out-of-sample portfolio risk test
+│   ├── make_figures.py           # report figures
+│   └── visualize_surface.py      # animated surface evolution (optional)
 │
 ├── tests/                        # unit tests, incl. the synthetic-recovery harness
 │   ├── test_simulate.py
