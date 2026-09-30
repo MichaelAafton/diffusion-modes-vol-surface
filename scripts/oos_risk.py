@@ -18,12 +18,7 @@ A ratio of 1 means perfect calibration.
 import numpy as np
 import pandas as pd
 
-from src.data_pipeline import (
-    load_optionmetrics,
-    preprocess_options_data,
-    ReparamConfig,
-    build_surface_panel,
-)
+from src.data_pipeline import build_study_panel
 from src.calibration import model_spectrum
 
 
@@ -33,9 +28,10 @@ from src.calibration import model_spectrum
 N_Z = 8
 TRAIN_FRAC = 0.70
 
-# Fitted Phase-5 bootstrap medians
-D_FIT = 0.688
-KAPPA_FIT = 0.0109
+# Maturity-averaged Phase-5 fit (index units 0.688 / 0.0109) converted to
+# wavenumber units; not a fit to the study panel.
+D_FIT = 0.3529
+KAPPA_FIT = 0.002868
 M_FIT = 6.99
 
 # Train/test split
@@ -108,20 +104,9 @@ def portfolio_report(covs, test, portfolios):
 
 def main():
 
-    # Build the same 8-bin real-data instrument used in PCA
+    # The study panel (single source of truth)
 
-    cfg = ReparamConfig(
-        z_min=-1.15,
-        z_max=1.10,
-        n_z_bins=N_Z,
-    )
-
-    df = preprocess_options_data(
-        load_optionmetrics(),
-        cfg,
-    )
-
-    out = build_surface_panel(df, cfg)
+    out = build_study_panel()
 
     panel = out["panel"].to_numpy(dtype=float)
 
@@ -177,6 +162,7 @@ def main():
         D_FIT,
         KAPPA_FIT,
         M_FIT,
+        out["z_centers"],
         return_corr=True,
     )
 
@@ -257,6 +243,14 @@ def main():
         "butterfly": butterfly,
         "equal_weight": equal_weight,
     }
+
+    n_bins = panel.shape[1]
+    for name, w in portfolios.items():
+        if len(w) != n_bins:
+            raise ValueError(
+                f"portfolio '{name}' has {len(w)} weights but the panel has "
+                f"{n_bins} bins; define portfolios on the kept bins"
+            )
 
     # Report
 

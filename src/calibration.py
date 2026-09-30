@@ -37,7 +37,7 @@ Status: scaffolding. Implement once Phases 1–4 are complete.
 import numpy as np
 from dataclasses import dataclass
 from scipy.optimize import minimize  # noqa: F401  (used once fitting is implemented)
-from src.simulate import StochasticHeatEquation, SPDEConfig
+from src.simulate import wavenumbers, decay_rates, cosine_basis
 
 
 @dataclass
@@ -103,45 +103,40 @@ def model_spectrum(
     D,
     kappa,
     mean_inc_var,
-    n_z=8,
+    z_points,
     z_min=-1.15,
     z_max=1.10,
+    n_modes=40,
     dt=1.0,
     return_corr=False,
 ):
     """Exact variance shares of daily changes under the composite model.
 
+    The membrane lives on [z_min, z_max] (Neumann boundaries) and is observed
+    at ``z_points``: the centres of the panel bins that survive the coverage
+    rule (see ``data_pipeline.build_study_panel``). The mode sum runs to
+    ``n_modes`` well above the number of sample points, so the field is not
+    truncated to the grid.
+
     Covariance of increments, built from the OU increment law
 
-        Var(dF_k) = 2 V_k (1 - exp(-gamma_k dt))
+        Var(dF_k) = 2 V_k (1 - exp(-gamma_k dt)),
+        gamma_k = D q_k^2 + kappa q_k^4,  q_k = k pi / L,
 
-    on the sampled cosine basis, plus a uniform level-factor
-    increment variance.
+    plus a uniform level-factor increment variance ``mean_inc_var``.
 
-    By default, returns the correlation-normalised eigenvalue
-    shares, matching ``run_pca``.
-
-    If ``return_corr=True``, returns the 8x8 correlation matrix
-    itself instead.
+    By default, returns the correlation-normalised eigenvalue shares,
+    matching ``run_pca``. If ``return_corr=True``, returns the correlation
+    matrix itself instead.
     """
-    cfg = SPDEConfig(
-        D=D,
-        kappa=kappa,
-        n_z=n_z,
-        n_modes=n_z,
-        z_min=z_min,
-        z_max=z_max,
-    )
+    L = z_max - z_min
+    q = wavenumbers(n_modes, L)
+    gamma = decay_rates(q, D, kappa)
+    stationary_variance = 1.0 / (2.0 * gamma)          # unit noise amplitude
+    w = 2.0 * stationary_variance * (1.0 - np.exp(-gamma * dt))  # per-mode increment variance
 
-    spde = StochasticHeatEquation(cfg)
-
-    w = 2.0 * spde.stationary_variance * (
-        1.0 - np.exp(-spde.decay_rates * dt)
-    )  # per-mode increment variance
-
-    Phi = spde.basis_functions  # (n_modes, n_z)
-
-    cov = Phi.T @ np.diag(w) @ Phi + mean_inc_var
+    Phi = cosine_basis(q, z_points, z_min, L)          # (n_modes, n_points)
+    cov = Phi.T @ (w[:, None] * Phi) + mean_inc_var
 
     d = np.sqrt(np.diag(cov))
     corr = cov / np.outer(d, d)
@@ -152,19 +147,30 @@ def model_spectrum(
     eig = np.linalg.eigvalsh(corr)[::-1]  # descending
     return eig / eig.sum()
 
-def fit_composite(target, sigma, x0=(0.2, 0.02, 11.2)):
+
+def crossover_mode_index(D, kappa, z_min=-1.15, z_max=1.10):
+    """Crossover k* = (L/pi) sqrt(D/kappa), expressed as a mode index."""
+    return (z_max - z_min) / np.pi * np.sqrt(D / kappa)
+
+
+def fit_composite(target, sigma, z_points, x0=(0.1, 0.005, 11.2)):
     """Fit (D, kappa, mean_inc_var) to a spectrum by weighted least squares.
 
-    Fits log-parameters (positivity, scale-symmetric); modes 1-7 only
-    (mode 8 is determined by the sum-to-one constraint). Returns dict
-    with best-fit params and chi2 (dof = 7 - 3 = 4).
+    Fits log-parameters (positivity, scale-symmetric) on all modes except
+    the last, which is determined by the sum-to-one constraint. D and kappa
+    are in wavenumber units (z^2/day, z^4/day). Returns a dict with best-fit
+    params, chi2 and dof = (n - 1) - 3.
     """
+    target = np.asarray(target)
+    sigma = np.asarray(sigma)
+    n_fit = len(target) - 1
+
     def chi2(logp):
         D, kappa, m = np.exp(logp)
-        model = model_spectrum(D, kappa, m)
-        return np.sum(((model[:7] - target[:7]) / sigma[:7]) ** 2)
+        model = model_spectrum(D, kappa, m, z_points)
+        return np.sum(((model[:n_fit] - target[:n_fit]) / sigma[:n_fit]) ** 2)
 
     res = minimize(chi2, np.log(x0), method="Nelder-Mead")
     D, kappa, m = np.exp(res.x)
     return {"D": D, "kappa": kappa, "mean_inc_var": m,
-            "chi2": res.fun, "success": res.success}
+            "chi2": res.fun, "dof": n_fit - 3, "success": res.success}

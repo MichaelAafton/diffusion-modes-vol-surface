@@ -1,13 +1,17 @@
 import numpy as np
 import pandas as pd
 
+from src.data_pipeline import load_study_spectrum
 from src.simulate import StochasticHeatEquation, SPDEConfig
 from src.pca import run_pca, slope
 
 
-# Match the real-data instrument
+# Match the real-data instrument: same sample points as the study panel
+ref = load_study_spectrum()
+Z_POINTS = tuple(ref["z_centers"])
 N_DAYS = 2500
-N_Z = 8
+N_Z = len(Z_POINTS)
+N_MODES = 40   # field resolved well beyond the sample points (no truncation)
 
 Z_MIN = -1.15
 Z_MAX = 1.10
@@ -43,11 +47,11 @@ D_FIXED = 0.2
     config = SPDEConfig(
         D=D,
         kappa=kappa,
-        n_z=N_Z,
+        z_points=Z_POINTS,
         z_min=Z_MIN,
         z_max=Z_MAX,
         seed=seed,
-        n_modes=N_Z
+        n_modes=N_MODES
     )
 
     model = StochasticHeatEquation(config)
@@ -162,16 +166,15 @@ if __name__ == "__main__":
             },
         )
     )'''
-# fingerprint test: full spectrum at the winning cell
-config = SPDEConfig(D=0.2, kappa=0.02, n_z=N_Z, n_modes=N_Z,
+# fingerprint test: full spectrum at the hand-fit cell (wavenumber units)
+config = SPDEConfig(D=0.1026, kappa=0.005262, n_modes=N_MODES, z_points=Z_POINTS,
                     z_min=Z_MIN, z_max=Z_MAX, seed=0, include_mean_mode=True, mean_mode_noise_std=3.35)
 model = StochasticHeatEquation(config)
 surface = model.simulate(n_days=N_DAYS)
 changes = np.diff(np.asarray(surface, float), axis=0)
 pca = run_pca(changes, n_components=N_Z)
 
-real = np.array([0.915, 0.0493, 0.0164, 0.0067,
-                 0.0064, 0.0029, 0.0019, 0.0014])
+real = ref["shares"]
 synth = pca.explained_variance_ratio
 
 print("mode | real    | synthetic")

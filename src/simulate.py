@@ -37,6 +37,34 @@ import numpy as np
 from dataclasses import dataclass
 
 
+# ---------------------------------------------------------------------------
+# Shared definitions (used by the simulator and by calibration.model_spectrum)
+# ---------------------------------------------------------------------------
+
+def wavenumbers(n_modes: int, L: float) -> np.ndarray:
+    """Physical wavenumbers q_k = k*pi/L for k = 1..n_modes (units: 1/z)."""
+    return np.arange(1, n_modes + 1) * np.pi / L
+
+
+def decay_rates(q: np.ndarray, D: float, kappa: float = 0.0) -> np.ndarray:
+    """Relaxation rates gamma_k = D q_k^2 + kappa q_k^4 (per day).
+
+    D has units z^2/day and kappa z^4/day, because q is a physical wavenumber.
+    """
+    return D * q ** 2 + kappa * q ** 4
+
+
+def cosine_basis(q: np.ndarray, z: np.ndarray, z_min: float, L: float) -> np.ndarray:
+    """Neumann cosine modes sqrt(2/L) cos(q_k (z - z_min)), shape (n_modes, len(z))."""
+    return np.sqrt(2 / L) * np.cos(np.outer(q, np.asarray(z, dtype=float) - z_min))
+
+
+def bin_centres(z_min: float, z_max: float, n_bins: int) -> np.ndarray:
+    """Centres of n_bins uniform bins on [z_min, z_max] (the panel's sample points)."""
+    edges = np.linspace(z_min, z_max, n_bins + 1)
+    return 0.5 * (edges[:-1] + edges[1:])
+
+
 @dataclass
 class SPDEConfig:
     """Configuration for the stochastic heat equation simulation.
@@ -76,6 +104,7 @@ class SPDEConfig:
     include_mean_mode: bool = False  # extra slow "market level" mode; OFF for the clean harness
     mean_mode_decay_rate: float = 0.002  # per day; ≈ old default D*0.01 at D=0.2
     mean_mode_noise_std: float = 0.5  # daily kick size of the level factor
+    z_points: tuple[float, ...] | None = None  # sample points; None = linspace(z_min, z_max, n_z)
 
 
 class StochasticHeatEquation:
@@ -98,31 +127,28 @@ class StochasticHeatEquation:
             config = SPDEConfig()
         self.config = config
         self.L = config.z_max - config.z_min  # domain length
-        self.z_grid = np.linspace(config.z_min, config.z_max, config.n_z)
+        if config.z_points is not None:
+            self.z_grid = np.asarray(config.z_points, dtype=float)
+        else:
+            self.z_grid = np.linspace(config.z_min, config.z_max, config.n_z)
+        self.n_points = len(self.z_grid)
 
-        # Wavenumbers for modes k = 1, 2, ..., n_modes
-        # (k=0 is the mean/constant mode, handled separately)
+        # Modes k = 1..n_modes (k = 0, the mean, is handled separately)
         self.k = np.arange(1, config.n_modes + 1)
-        self.wavenumbers = self.k * np.pi / self.L
+        self.wavenumbers = wavenumbers(config.n_modes, self.L)
 
-        # Decay rates for each mode: γₖ = D * (kπ/L)²
-        # was: self.decay_rates = config.D * self.wavenumbers ** 2
-        self.decay_rates = config.D * self.k ** 2 + config.kappa * self.k ** 4
+        # gamma_k = D q_k^2 + kappa q_k^4 with physical wavenumbers q_k = k*pi/L
+        self.decay_rates = decay_rates(self.wavenumbers, config.D, config.kappa)
 
-        # Stationary variance of each mode: σ²_noise / (2γₖ)
+        # Stationary variance of each mode: sigma^2_noise / (2 gamma_k)
         self.stationary_variance = (
             config.noise_amplitude ** 2 / (2 * self.decay_rates)
         )
 
-        # Pre-compute basis functions (cosines) on the spatial grid
-        # φₖ(z) = √(2/L) * cos(kπ(z - z_min)/L)
-        # The √(2/L) normalisation makes them orthonormal
-        z_shifted = self.z_grid - config.z_min
-        self.basis_functions = np.zeros((config.n_modes, config.n_z))
-        for i, k in enumerate(self.k):
-            self.basis_functions[i, :] = np.sqrt(2 / self.L) * np.cos(
-                k * np.pi * z_shifted / self.L
-            )
+        # Orthonormal cosine basis evaluated at the sample points
+        self.basis_functions = cosine_basis(
+            self.wavenumbers, self.z_grid, config.z_min, self.L
+        )
 
         self.rng = np.random.default_rng(config.seed)
 
@@ -161,7 +187,7 @@ class StochasticHeatEquation:
         mean_noise_std = cfg.mean_mode_noise_std * np.sqrt(dt)
 
         # Storage for output
-        surface = np.zeros((n_days, cfg.n_z))
+        surface = np.zeros((n_days, self.n_points))
 
         for t in range(n_days):
             # Reconstruct surface from Fourier modes
@@ -199,9 +225,9 @@ class StochasticHeatEquation:
     def theoretical_eigenvalues(self, n_components: int) -> np.ndarray:
         """Return the theoretical eigenvalue spectrum.
 
-        For the stochastic heat equation, the variance of mode k
-        scales as 1/k². This provides the ground truth for comparison
-        with empirical PCA eigenvalues.
+        Stationary level variances, proportional to 1/gamma_k (1/k² for
+        pure diffusion). This is the ground truth for PCA on LEVELS; for
+        daily changes use theoretical_increment_eigenvalues.
 
         Parameters
         ----------
@@ -211,10 +237,9 @@ class StochasticHeatEquation:
         Returns
         -------
         eigenvalues : np.ndarray, shape (n_components,)
-            Theoretical eigenvalues (proportional to 1/k²).
+            Theoretical eigenvalues (proportional to 1/gamma_k).
         """
-        k = np.arange(1, n_components + 1)
-        eigenvalues = 1.0 / (self.config.D * (k * np.pi / self.L) ** 2)
+        eigenvalues = 1.0 / self.decay_rates[:n_components]
         # Normalise so they sum to the same as explained variance fractions
         eigenvalues = eigenvalues / eigenvalues.sum()
         return eigenvalues

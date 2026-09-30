@@ -10,8 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 # Project module imports
-from src.data_pipeline import load_optionmetrics, preprocess_options_data, \
-     ReparamConfig, build_surface_panel
+from src.data_pipeline import build_study_panel
 from src.pca import run_pca
 from src.calibration import model_spectrum
 
@@ -23,28 +22,29 @@ FIGDIR = PROJECT_ROOT / "report" / "figures"
 FIGDIR.mkdir(parents=True, exist_ok=True)  # Create figures folder if missing
 
 # shared data
-cfg = ReparamConfig(z_min=-1.15, z_max=1.10, n_z_bins=8)
-out = build_surface_panel(preprocess_options_data(load_optionmetrics(), cfg), cfg)
+out = build_study_panel()
 panel = out["panel"].to_numpy(dtype=float)
 zc = np.asarray(out["z_centers"])
 changes = np.diff(panel, axis=0)
-pca8 = run_pca(changes, n_components=8)
-pca7 = run_pca(changes[:, 1:], n_components=7)
+n = changes.shape[1]
+pca8 = run_pca(changes, n_components=n)
+pca7 = run_pca(changes[:, 1:], n_components=n - 1)
 
-k = np.arange(1, 9)
+k = np.arange(1, n + 1)
 real = pca8.explained_variance_ratio
 boot = np.load(PROCESSED_DIR / "real_spectrum_boot.npy")
 lo, hi = np.percentile(boot, [2.5, 97.5], axis=0)
 
 # Fig 1: spectrum
-fit = model_spectrum(0.688, 0.0109, 6.99)
-diff_best = model_spectrum(5.0, 0.0, 0.0)          # diffusion's best attempt (no level)
+# maturity-averaged fit, converted to wavenumber units (not a study-panel fit)
+fit = model_spectrum(0.3529, 0.002868, 6.99, zc)
+diff_best = model_spectrum(2.565, 0.0, 0.0, zc)    # diffusion's best attempt (no level)
 
 fig, ax = plt.subplots(figsize=(4.2, 3.2))
 ax.errorbar(k, real, yerr=[real - lo, hi - real], fmt="o", ms=4,
             capsize=2, label="SPX (95% CI)", zorder=3)
-ax.plot(k, fit, "s--", ms=3, label=r"composite fit ($D{=}0.69,\ \kappa{=}0.011$)")
-ax.plot(k[:7], diff_best[:7], "^:", ms=3, label=r"pure diffusion (saturated, $\kappa{=}0$)")
+ax.plot(k, fit, "s--", ms=3, label="composite (maturity-averaged fit)")
+ax.plot(k[:-1], diff_best[:-1], "^:", ms=3, label=r"pure diffusion (saturated, $\kappa{=}0$)")
 ax.set_xscale("log"); ax.set_yscale("log")
 ax.set_xticks(k); ax.set_xticklabels(k)
 ax.set_xlabel("mode $k$"); ax.set_ylabel("variance share $\\lambda_k$")
