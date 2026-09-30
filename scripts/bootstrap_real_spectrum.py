@@ -2,15 +2,12 @@
 
 import numpy as np
 from pathlib import Path
-from src.data_pipeline import load_optionmetrics, preprocess_options_data, \
-     ReparamConfig, build_surface_panel
+from src.data_pipeline import build_study_panel
 from src.pca import run_pca
 
 BLOCK, N_BOOT, SEED = 25, 1000, 0
 
-cfg = ReparamConfig(z_min=-1.15, z_max=1.10, n_z_bins=8)
-df  = preprocess_options_data(load_optionmetrics(), cfg)
-changes = np.diff(build_surface_panel(df, cfg)["panel"].values, axis=0)
+changes = np.diff(build_study_panel()["panel"].values, axis=0)
 
 T, n = changes.shape
 rng = np.random.default_rng(SEED)

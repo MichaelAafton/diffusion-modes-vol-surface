@@ -44,6 +44,7 @@ downstream. It is a modelling decision to document, captured here in
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
+from pathlib import Path
 import warnings
 
 # Time-scaling constant. Implied vol is annualized; maturities here are handled in
@@ -366,7 +367,18 @@ def build_surface_panel(
     < min_coverage fill across days are dropped (no interpolation:
     invented data would leak smoothness into the spectrum), then
     remaining incomplete days are dropped.
+
+    The input must contain a single maturity; averaging across maturities
+    within a z-bin is refused. Real-data callers should use
+    ``build_study_panel``.
     """
+    if "days" in df.columns and df["days"].nunique() > 1:
+        raise ValueError(
+            f"build_surface_panel got {df['days'].nunique()} maturities "
+            f"{sorted(df['days'].unique().tolist())}; filter to one maturity "
+            "first (use build_study_panel for the study slice)."
+        )
+
     edges = np.linspace(config.z_min, config.z_max, config.n_z_bins + 1)
     centers = 0.5 * (edges[:-1] + edges[1:])
     df = df.copy()
@@ -375,12 +387,78 @@ def build_surface_panel(
     panel = (df.groupby(["date", "z_bin"])["implied_vol"]
                .mean().unstack("z_bin").astype(float))
 
-    coverage = panel.notna().mean(axis=0)
-
-    keep = panel.notna().mean(axis=0) >= min_coverage   # per-bin fill rate
+    coverage = panel.notna().mean(axis=0)            # per-bin fill rate
+    keep = coverage >= min_coverage
+    kept_bins = keep.index[keep].astype(int).to_numpy()
     panel = panel.loc[:, keep].dropna(axis=0)
 
     return {"panel": panel,                    # DataFrame: days x bins
-            "z_centers": centers[keep.values],
-            "n_bins_dropped": int((~keep).sum()),
+            "z_centers": centers[kept_bins],
+            "kept_bins": kept_bins,
+            "n_bins_dropped": config.n_z_bins - len(kept_bins),
             "coverage": coverage}
+
+
+# ---------------------------------------------------------------------------
+# The study panel: the single source of truth for every real-data script
+# ---------------------------------------------------------------------------
+
+STUDY_MATURITY_DAYS = 30
+
+
+def build_study_panel(
+    df_raw: pd.DataFrame | None = None,
+    config: ReparamConfig | None = None,
+    min_coverage: float = 0.95,
+) -> dict:
+    """Build the study panel: SPX 30-calendar-day slice, daily implied vol per z-bin.
+
+    Specification (fixed; every real-data script uses this function):
+      - maturity: days == 30 (single slice, asserted)
+      - moneyness: z = log(K/S) / (sigma_ATM * sqrt(T))  (D1-D4)
+      - grid: 8 uniform bins on [-1.15, 1.10]  (ReparamConfig defaults)
+      - coverage: bins with < 95% daily fill are dropped, then incomplete days
+
+    Parameters
+    ----------
+    df_raw : DataFrame or None
+        Output of ``load_optionmetrics``; loaded from the default paths if None.
+    config : ReparamConfig or None
+        Defaults to ``ReparamConfig()`` (the study grid).
+
+    Returns
+    -------
+    dict with keys ``panel`` (DataFrame, days x kept bins), ``z_centers``,
+    ``kept_bins``, ``n_bins_dropped``, ``coverage``, ``maturities``, ``config``.
+    """
+    if config is None:
+        config = ReparamConfig()
+    if df_raw is None:
+        df_raw = load_optionmetrics()
+
+    df = df_raw[df_raw["days"] == STUDY_MATURITY_DAYS]
+    df = preprocess_options_data(df, config)
+
+    maturities = sorted(df["days"].unique().tolist())
+    assert set(maturities) == {STUDY_MATURITY_DAYS}, (
+        f"study panel must be the {STUDY_MATURITY_DAYS}-day slice, got {maturities}"
+    )
+
+    out = build_surface_panel(df, config, min_coverage=min_coverage)
+    out["maturities"] = maturities
+    out["config"] = config
+    return out
+
+
+STUDY_SPECTRUM_PATH = (
+    Path(__file__).resolve().parent.parent / "data" / "processed" / "study_spectrum.npz"
+)
+
+
+def load_study_spectrum(path: str | Path | None = None) -> dict:
+    """Load the reference spectrum written by ``scripts/build_panel.py``.
+
+    Keys: ``shares``, ``z_centers``, ``kept_bins``, ``panel_shape``, ``p_tail``.
+    """
+    npz = np.load(STUDY_SPECTRUM_PATH if path is None else path)
+    return {k: npz[k] for k in npz.files}
