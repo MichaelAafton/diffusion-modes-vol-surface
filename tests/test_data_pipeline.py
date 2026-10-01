@@ -1,15 +1,17 @@
-"""Tests for the (z, τ) reparameterization, including the √T moneyness scaling."""
+"""Tests for moneyness, loading and the study panel."""
 
 import numpy as np
 import pandas as pd
 import pytest
 
+from scipy.stats import norm
+
 from src.data_pipeline import (
     ReparamConfig,
+    build_study_panel,
+    build_surface_panel,
     compute_moneyness,
-    compute_psychological_time,
-    inverse_psychological_time,
-    build_grid,
+    load_optionmetrics,
     preprocess_options_data,
 )
 
@@ -44,30 +46,6 @@ class TestMoneyness:
         assert z[0] < 0 < z[2]
 
 
-class TestPsychologicalTime:
-    def test_roundtrip(self):
-        ttoexp = np.array([3.0, 20.0, 60.0, 250.0])
-        tau = compute_psychological_time(ttoexp, psi=25.0)
-        recovered = inverse_psychological_time(tau, psi=25.0)
-        np.testing.assert_allclose(recovered, ttoexp, rtol=1e-9)
-
-    def test_compresses_long_horizons(self):
-        """Short maturities are spread out; long ones are compressed."""
-        tau = compute_psychological_time(np.array([20.0, 40.0, 200.0, 220.0]), psi=25.0)
-        near_gap = tau[1] - tau[0]   # 20 → 40 business days
-        far_gap = tau[3] - tau[2]    # 200 → 220 business days
-        assert near_gap > far_gap
-
-
-class TestGrid:
-    def test_shapes(self):
-        grid = build_grid(ReparamConfig(n_z_bins=30, n_tau_bins=10))
-        assert grid["z_edges"].shape == (31,)
-        assert grid["z_centers"].shape == (30,)
-        assert grid["tau_edges"].shape == (11,)
-        assert grid["tau_centers"].shape == (10,)
-
-
 class TestPreprocess:
     def test_adds_columns_and_filters(self):
         # One-year options (√T = 1). z = ±3 ⇒ K/S ∈ [≈0.55, ≈1.82], so K = 500
@@ -85,6 +63,72 @@ class TestPreprocess:
             }
         )
         out = preprocess_options_data(df, ReparamConfig(z_min=-3.0, z_max=3.0))
-        assert {"z", "tau", "T_years"} <= set(out.columns)
+        assert {"z", "T_years"} <= set(out.columns)
         assert out["T_years"].iloc[0] == pytest.approx(1.0)
         assert len(out) == 2  # the z out-of-range row is dropped
+
+
+def _vendor_like_raw(days_list=(10, 30, 60), n_dates=40, seed=0):
+    """Pillars in load_optionmetrics schema: deltas x100, calls and puts, several maturities."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for d in pd.bdate_range("2020-01-02", periods=n_dates):
+        atm = 0.2 + 0.01 * rng.normal()
+        for days in days_list:
+            T = days / 365
+            for delta in list(range(10, 55, 5)) + list(range(-50, -5, 5)):
+                ce = delta / 100 if delta > 0 else 1 + delta / 100
+                lnK = -norm.ppf(ce) * atm * np.sqrt(T) + 0.5 * atm ** 2 * T
+                rows.append(dict(days=days, date=d, spot=100.0, strike=100 * np.exp(lnK),
+                                 ttoexp=days * 252 / 365, mid_price=1.0,
+                                 option_type="C" if delta > 0 else "P",
+                                 implied_vol=atm, sigma_atm=atm, delta=delta))
+    return pd.DataFrame(rows)
+
+
+class TestLoadOptionmetrics:
+    def test_coerces_numeric_columns_and_keeps_otm(self, tmp_path):
+        """Vendor columns arrive as strings/Decimals; the loader must coerce them."""
+        surf = pd.DataFrame({
+            "date": ["2020-01-02"] * 4,
+            "days": ["30", "30", "30", "30"],
+            "delta": ["50", "-50", "25", "75"],
+            "cp_flag": ["C", "P", "C", "C"],
+            "impl_volatility": ["0.20", "0.22", "0.18", "0.25"],
+            "impl_strike": ["100", "100", "105", "95"],
+            "impl_premium": ["2.0", "2.1", "0.8", "5.5"],
+        })
+        spot = pd.DataFrame({"date": ["2020-01-02"], "spot": ["100.0"]})
+        surf.to_parquet(tmp_path / "s.parquet")
+        spot.to_parquet(tmp_path / "p.parquet")
+
+        df = load_optionmetrics(tmp_path / "s.parquet", tmp_path / "p.parquet")
+        for col in ["spot", "strike", "implied_vol", "mid_price", "delta", "days", "sigma_atm"]:
+            assert pd.api.types.is_numeric_dtype(df[col]), col
+        assert (df["delta"].abs() <= 50).all()          # |delta| = 75 (ITM) dropped
+        assert df["sigma_atm"].iloc[0] == pytest.approx(0.21)  # mean of the two 50-delta vols
+
+
+class TestSurfacePanel:
+    def test_refuses_mixed_maturities(self):
+        df = preprocess_options_data(_vendor_like_raw(), ReparamConfig())
+        with pytest.raises(ValueError, match="maturities"):
+            build_surface_panel(df, ReparamConfig())
+
+    def test_drops_bins_below_coverage(self):
+        raw = _vendor_like_raw(days_list=(30,))
+        df = preprocess_options_data(raw, ReparamConfig())
+        first_bin_hi = -1.15 + 2.25 / 8
+        sparse = df[df["z"] < first_bin_hi]
+        df = df.drop(sparse.index[sparse["date"].isin(df["date"].unique()[::3])])
+        out = build_surface_panel(df, ReparamConfig(), min_coverage=0.95)
+        assert 0 not in out["kept_bins"]
+        assert out["n_bins_dropped"] == 1
+        assert len(out["z_centers"]) == out["panel"].shape[1]
+
+
+class TestStudyPanel:
+    def test_uses_only_the_30_day_slice(self):
+        out = build_study_panel(_vendor_like_raw())
+        assert out["maturities"] == [30]
+        assert out["panel"].shape[0] == 40

@@ -1,15 +1,13 @@
 """Build the study panel from raw parquet and record the reference spectrum.
 
-    python scripts/build_panel.py
+    python -m scripts.build_panel
 
 Writes data/processed/study_spectrum.npz (shares, z-centres, panel shape),
 which downstream scripts load instead of hardcoding the spectrum.
 """
-from pathlib import Path
-
 import numpy as np
 
-from src.data_pipeline import build_study_panel
+from src.data_pipeline import STUDY_SPECTRUM_PATH, build_study_panel
 from src.pca import run_pca, slope
 
 out = build_study_panel()
@@ -31,8 +29,7 @@ print("shares:         ", evr)
 print(f"p_tail:          {p_tail:.3f}")
 print("local slopes:   ", np.round(local, 2))
 
-root = Path(__file__).resolve().parent.parent
-path = root / "data" / "processed" / "study_spectrum.npz"
+path = STUDY_SPECTRUM_PATH
 np.savez(path, shares=evr, z_centers=out["z_centers"],
          kept_bins=out["kept_bins"], panel_shape=np.array(panel.shape),
          p_tail=p_tail)

@@ -1,103 +1,19 @@
 """
-Field-Theory Calibration
-=========================
+Forward model for the daily-change spectrum of the membrane + level model.
 
-Calibrates the two effective stiffness parameters ``(κ, μ)`` of the 2D field
-theory to the **empirical** correlation structure of real option returns, and
-tests how well the heat-equation form matches the data.
+``model_spectrum`` gives the exact correlation-PCA variance shares of daily
+changes for a membrane (rates gamma_k = D q_k^2 + kappa q_k^4) plus a uniform
+level factor, observed at given sample points. It is used for the analytic
+diffusion-ceiling decomposition in ``scripts/test49_followups.py``.
 
-The 2D stochastic PDE on the ``(z, τ)`` surface,
-
-    ∂ₜp = κ ∂²_z p + μ ∂²_τ p + ξ(z,τ,t),
-
-makes correlation depend on "distance" in ``(z, τ)`` space:
-    κ — effective diffusion/stiffness along moneyness z
-    μ — effective diffusion/stiffness along psychological time τ
-
-Procedure (Phase 5)
--------------------
-1. Compute the empirical correlation matrix from real data.
-2. Write the model correlation matrix as a function of ``(κ, μ)``.
-3. Minimise ‖C_empirical − C_model(κ, μ)‖²_F via ``scipy.optimize``; report fit
-   quality and parameter confidence intervals.
-
-On "universality" — frame it as a question, not a result
----------------------------------------------------------
-The original presentation suggests the fitted parameters are roughly consistent
-across assets. This is the part **most likely not to replicate** on real data:
-equity-index skew, single-stock skew, and crypto-option skew genuinely differ in
-shape. Treat cross-asset consistency as an *open hypothesis to test*, and report
-the differences honestly. "Universality holds for the leading modes but the fitted
-stiffness differs across asset classes" is a more credible — and more interesting —
-finding than a forced claim of universality.
-
-Status: scaffolding. Implement once Phases 1–4 are complete.
+It does not include the vendor's smoothing kernel, which is part of the
+measurement (see README); it is therefore not a model of the observed surface.
 """
 
 import numpy as np
-from dataclasses import dataclass
-from scipy.optimize import minimize  # noqa: F401  (used once fitting is implemented)
+
 from src.simulate import wavenumbers, decay_rates, cosine_basis
 
-
-@dataclass
-class FieldTheoryParams:
-    """Effective stiffness parameters of the 2D field theory.
-
-    Attributes
-    ----------
-    kappa : float
-        Stiffness along moneyness ``z``.
-    mu : float
-        Stiffness along psychological time ``τ``.
-    """
-    kappa: float = 0.1
-    mu: float = 0.7
-
-
-def model_correlation_2d(
-    z_grid: np.ndarray,
-    tau_grid: np.ndarray,
-    params: FieldTheoryParams,
-    n_terms_z: int = 20,
-    n_terms_tau: int = 10,
-) -> np.ndarray:
-    """Model correlation matrix for the 2D field theory over the flattened grid.
-
-    Sketch of the approach:
-      1. Build the 2D Fourier basis φ_{k,l}(z,τ) = cos(kπz/L_z)·cos(lπτ/L_τ).
-      2. Each mode has variance ~ 1 / (κ k² + μ l²).
-      3. C(i,j) = Σ_{k,l} w_{k,l} φ_{k,l}(zᵢ,τᵢ) φ_{k,l}(zⱼ,τⱼ), normalised to unit diagonal.
-
-    TODO (Phase 5): implement after the 1D analysis (Phases 1–4) is complete.
-    """
-    raise NotImplementedError(
-        "2D model correlation — implement in Phase 5 after the 1D analysis."
-    )
-
-
-def fit_field_theory(
-    empirical_corr: np.ndarray,
-    z_grid: np.ndarray,
-    tau_grid: np.ndarray,
-    initial_params: FieldTheoryParams | None = None,
-) -> dict:
-    """Fit ``(κ, μ)`` to the empirical 2D correlation matrix.
-
-    Minimises ‖C_empirical − C_model(κ, μ)‖²_F over ``(κ, μ)``.
-
-    Returns
-    -------
-    result : dict with keys
-        'params'          : FieldTheoryParams — best-fit ``(κ, μ)``
-        'confidence'      : dict — confidence intervals for each parameter
-        'model_corr'      : np.ndarray — model correlation at best fit
-        'relative_error'  : float — relative Frobenius error
-
-    TODO (Phase 5): implement the fit and bootstrap/Hessian confidence intervals,
-    then run it per asset class and *report cross-asset differences honestly*.
-    """
-    raise NotImplementedError("Field-theory fitting — implement in Phase 5.")
 
 def model_spectrum(
     D,
@@ -146,31 +62,3 @@ def model_spectrum(
 
     eig = np.linalg.eigvalsh(corr)[::-1]  # descending
     return eig / eig.sum()
-
-
-def crossover_mode_index(D, kappa, z_min=-1.15, z_max=1.10):
-    """Crossover k* = (L/pi) sqrt(D/kappa), expressed as a mode index."""
-    return (z_max - z_min) / np.pi * np.sqrt(D / kappa)
-
-
-def fit_composite(target, sigma, z_points, x0=(0.1, 0.005, 11.2)):
-    """Fit (D, kappa, mean_inc_var) to a spectrum by weighted least squares.
-
-    Fits log-parameters (positivity, scale-symmetric) on all modes except
-    the last, which is determined by the sum-to-one constraint. D and kappa
-    are in wavenumber units (z^2/day, z^4/day). Returns a dict with best-fit
-    params, chi2 and dof = (n - 1) - 3.
-    """
-    target = np.asarray(target)
-    sigma = np.asarray(sigma)
-    n_fit = len(target) - 1
-
-    def chi2(logp):
-        D, kappa, m = np.exp(logp)
-        model = model_spectrum(D, kappa, m, z_points)
-        return np.sum(((model[:n_fit] - target[:n_fit]) / sigma[:n_fit]) ** 2)
-
-    res = minimize(chi2, np.log(x0), method="Nelder-Mead")
-    D, kappa, m = np.exp(res.x)
-    return {"D": D, "kappa": kappa, "mean_inc_var": m,
-            "chi2": res.fun, "dof": n_fit - 3, "success": res.success}

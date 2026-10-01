@@ -1,37 +1,23 @@
 """
-Stochastic Heat Equation Simulator — the Validation Harness
-============================================================
+Stochastic heat equation simulator (validation harness)
+=======================================================
 
-This simulator is the project's **validation harness**, not its study. By
-generating data from a known stochastic heat equation and running the entire
-downstream pipeline on it, we confirm the PCA / reparameterization / fitting code
-recovers what we put in (sinusoidal modes, λₖ ~ k⁻², the correct diffusion
-constant D). A clean fit here proves the *code* is correct — it is not a finding.
-The findings come from real data.
+Simulates a 1D membrane on the moneyness window [z_min, z_max] with Neumann
+boundaries:
 
-Simulates the stochastic PDE hypothesized to govern volatility-surface dynamics:
+    d_t p(z,t) = D d_z^2 p - kappa d_z^4 p + xi(z,t)
 
-    ∂ₜp(z,t) = D ∂²_z p(z,t) + ξ(z,t)
+In the cosine basis each mode is an Ornstein-Uhlenbeck process with rate
+gamma_k = D q_k^2 + kappa q_k^4, q_k = k pi / L, simulated exactly in time.
+An optional uniform level factor (OU, slow) can be added.
 
-where:
-    p(z,t) = perturbation of the vol surface at moneyness z, time t
-    D      = diffusion coefficient ("stiffness" of the surface)
-    ξ(z,t) = spatiotemporal white noise (random trading shocks)
-
-The simulation works in Fourier space, where each mode evolves independently
-as an Ornstein-Uhlenbeck process:
-
-    ∂ₜfₖ = -Dk² fₖ + ξₖ(t)
-
-with stationary variance ⟨fₖ²⟩ = σ²_noise / (2Dk²).
-
-This is the same equation that describes heat diffusion in a rod, or the
-fluctuations of an elastic string — the physical analogy at the heart of the
-project.
+The simulator generates known ground truth for checking the pipeline (PCA,
+binning, the forward model in ``calibration.model_spectrum``) and drives the
+vendor-kernel harness in ``scripts/test49_vendor_kernel.py``. Agreement on
+synthetic data validates code, not physics.
 
 References:
-    - Ioselevich, P. "A Data-Driven Factor Model for Option Risk"
-    - Le Coz, V. & Bouchaud, J.-P. — elastic string models for forward rates
+    - Le Coz, V. & Bouchaud, J.-P. -- elastic string models for forward rates
 """
 import numpy as np
 from dataclasses import dataclass
@@ -72,25 +58,26 @@ class SPDEConfig:
     Parameters
     ----------
     D : float
-        Diffusion coefficient. Controls the "stiffness" of the surface.
-        Higher D = stiffer surface = perturbations spread/decay faster.
-        Typical values from the presentation: D ~ 0.05 in normalised units.
+        Diffusion coefficient (z^2/day).
     n_z : int
-        Number of spatial grid points (moneyness axis).
-    z_min : float
-        Left boundary of the moneyness domain (e.g. -3 for 3σ puts).
-    z_max : float
-        Right boundary of the moneyness domain (e.g. +3 for 3σ calls).
+        Number of sample points when ``z_points`` is None (linspace on the window).
+    z_min, z_max : float
+        Window boundaries (Neumann). Pass them explicitly whenever ``z_points``
+        is given: the defaults describe a wide synthetic window, not the study's.
     n_modes : int
-        Number of Fourier modes to simulate. More modes = finer spatial
-        resolution but also more noise. The presentation used ~50 grid
-        points, so 20-30 modes is a good starting point.
+        Number of cosine modes simulated.
     noise_amplitude : float
-        Amplitude of the white noise driving term.
+        Amplitude of the white-noise forcing.
     dt : float
-        Time step (in units of trading days). dt=1 means daily.
+        Time step in trading days (1 = daily).
     seed : int or None
-        Random seed for reproducibility.
+        Random seed.
+    kappa : float
+        Bending stiffness (z^4/day); 0 gives pure diffusion.
+    include_mean_mode, mean_mode_decay_rate, mean_mode_noise_std :
+        Optional uniform level factor (OU): on/off, decay per day, daily kick s.d.
+    z_points : tuple of float or None
+        Sample points; None means linspace(z_min, z_max, n_z).
     """
     D: float = 0.05
     n_z: int = 50
@@ -102,7 +89,7 @@ class SPDEConfig:
     seed: int | None = 42
     kappa: float = 0.0
     include_mean_mode: bool = False  # extra slow "market level" mode; OFF for the clean harness
-    mean_mode_decay_rate: float = 0.002  # per day; ≈ old default D*0.01 at D=0.2
+    mean_mode_decay_rate: float = 0.002  # per day
     mean_mode_noise_std: float = 0.5  # daily kick size of the level factor
     z_points: tuple[float, ...] | None = None  # sample points; None = linspace(z_min, z_max, n_z)
 
@@ -277,27 +264,6 @@ class StochasticHeatEquation:
         return var_inc[:n_components]
 
 
-class StochasticHeatEquation2D:
-    """Simulator for the 2D stochastic heat equation on (z, τ) space.
-
-    Extends the 1D model to include the maturity (time-to-expiry) dimension:
-
-        ∂ₜp(z,τ,t) = D_z ∂²_z p + D_τ ∂²_τ p + ξ(z,τ,t)
-
-    where τ is "psychological time" (log-transformed maturity).
-
-    This corresponds to the full 2D ``(z, τ)`` analysis (Phases 3–5).
-
-    TODO: Implement alongside the 2D PCA / field-theory work.
-    """
-
-    def __init__(self):
-        raise NotImplementedError(
-            "2D SPDE simulator — implement this in Phase 4. "
-            "Start with the 1D version first."
-        )
-
-
 # ---------------------------------------------------------------------------
 # Convenience functions
 # ---------------------------------------------------------------------------
@@ -310,13 +276,12 @@ def generate_synthetic_dataset(
 ) -> dict:
     """Generate a complete synthetic dataset for the validation harness.
 
-    Entry point for the Phase 1 harness: it produces known ground truth so the
-    downstream pipeline can be verified before it is pointed at real data.
+    Produces known ground truth so the downstream pipeline can be checked.
 
     Parameters
     ----------
     n_days : int
-        Number of trading days (~8 years at 250 days/year).
+        Number of trading days.
     D : float
         Diffusion coefficient.
     n_z : int

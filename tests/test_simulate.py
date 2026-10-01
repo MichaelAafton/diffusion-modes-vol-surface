@@ -4,7 +4,10 @@ import numpy as np
 import pytest
 
 from src.pca import run_pca
-from src.simulate import StochasticHeatEquation, SPDEConfig, generate_synthetic_dataset
+from src.calibration import model_spectrum
+from src.simulate import (
+    SPDEConfig, StochasticHeatEquation, bin_centres, generate_synthetic_dataset,
+)
 
 
 class TestSPDEConfig:
@@ -49,11 +52,8 @@ class TestStochasticHeatEquation:
         assert spde.z_grid[-1] == pytest.approx(3.0)
 
     def test_stationary_variance_scaling(self, spde):
-        """Stationary variance should scale as ~1/k²."""
+        """Pure diffusion: V_k = 1/(2 D q_k^2), so V_1 / V_2 = 4."""
         var = spde.stationary_variance
-        # Ratio of consecutive variances should be ~ (k/(k+1))^2... wait
-        # Actually var_k ∝ 1/(D * wavenumber_k²) ∝ 1/k²
-        # So var[0]/var[1] should be ~ (2/1)^2 = 4
         ratio = var[0] / var[1]
         assert ratio == pytest.approx(4.0, rel=0.01)
 
@@ -104,3 +104,25 @@ class TestGenerateSyntheticDataset:
         assert len(dataset["z_grid"]) == 30
 
 
+class TestForwardModel:
+    """calibration.model_spectrum against direct simulation on the study instrument."""
+
+    Z = bin_centres(-1.15, 1.10, 8)[1:]          # the 7 kept bin centres
+
+    def test_shares_sum_to_one_and_descend(self):
+        s = model_spectrum(0.35, 0.003, 7.0, self.Z)
+        assert s.sum() == pytest.approx(1.0, abs=1e-12)
+        assert np.all(np.diff(s) <= 0)
+
+    def test_matches_simulation(self):
+        D, kappa, m = 0.3529, 0.002868, 6.99
+        analytic = model_spectrum(D, kappa, m, self.Z)
+        sims = []
+        for seed in range(3):
+            cfg = SPDEConfig(D=D, kappa=kappa, n_modes=40, z_min=-1.15, z_max=1.10,
+                             z_points=tuple(self.Z), include_mean_mode=True,
+                             mean_mode_noise_std=np.sqrt(m), mean_mode_decay_rate=0.0,
+                             seed=seed)
+            surface = StochasticHeatEquation(cfg).simulate(20000)
+            sims.append(run_pca(np.diff(surface, axis=0)).explained_variance_ratio)
+        np.testing.assert_allclose(np.mean(sims, axis=0)[:4], analytic[:4], rtol=0.1)

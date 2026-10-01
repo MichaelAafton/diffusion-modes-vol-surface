@@ -22,9 +22,7 @@ env/
 *.ipynb_metadata/
 
 # Data (too large for git) — keep the directory structure, ignore the contents
-data/raw/
 data/raw/*
-data/raw/*.parquet
 data/processed/*
 data/synthetic/*
 !data/raw/.gitkeep

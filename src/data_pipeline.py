@@ -1,84 +1,52 @@
 """
-Data Pipeline & Reparameterization
-====================================
+Data pipeline: OptionMetrics vol surfaces -> the study panel
+============================================================
 
-Loads option data — **real and synthetic** — and implements the
-reparameterization from raw ``(K, ttoexp)`` coordinates into the normalised
-``(z, τ)`` space where the heat-equation structure (if any) becomes visible.
+Loads SPX implied-volatility surfaces (IvyDB ``vsurfd``), maps each vendor pillar
+to standardised moneyness
 
-Design note (the whole point of the project)
----------------------------------------------
-Synthetic data is the **validation harness**: it proves this pipeline recovers
-known ground truth. Real options data is the **actual study**: the research
-question is where real surfaces match the diffusive-membrane picture and where
-they deviate. Both flow through the *same* code below — the comparison is the
-contribution.
+    z = log(K / S) / (sigma_ATM * sqrt(T)),
 
-The reparameterization
-----------------------
-Moneyness (standard deviations to expiry):
+and builds the study panel: the 30-calendar-day slice, daily implied vol averaged
+within 8 uniform z-bins on [-1.15, 1.10]. ``build_study_panel`` is the single
+place this panel is built; every real-data script calls it.
 
-    z = log(K / S) / (σ · √T)
-
-The ``√T`` is **not optional**. Implied vol ``σ`` is annualized, so to express
-moneyness in standard deviations *to expiry* you must scale by ``√T`` (equivalently,
-use total implied variance over the option's life). Without it, ``z`` is not
-comparable across maturities and the entire ``τ``-dimension analysis is distorted.
-State this convention explicitly in any writeup.
-
-Psychological time (log-compressed maturity):
-
-    τ = ψ · log(1 + T/ψ)     with ψ ≈ 20–30 business days
-
-This compresses long horizons relative to short ones, matching the intuition that
-1m-vs-2m feels larger than 1y-vs-2y.
-
-Hedging convention
-------------------
-Delta-hedged P&L requires a chosen **hedging frequency**. "Continuously hedged" is
-a fiction; the frequency you pick injects both noise and bias into every number
-downstream. It is a modelling decision to document, captured here in
-``ReparamConfig.hedge_frequency`` rather than hidden.
+The vendor surface is kernel-smoothed (calls and puts separately), so the panel
+is a smoothed measurement of the smile, not raw quotes. See README.
 """
+
+from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from dataclasses import dataclass
-from pathlib import Path
-import warnings
 
-# Time-scaling constant. Implied vol is annualized; maturities here are handled in
-# business days, so convert to years with this factor for the √T moneyness scaling.
+# Implied vol is annualised; maturities are handled in business days.
 BDAYS_PER_YEAR = 252.0
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+RAW_DIR = REPO_ROOT / "data" / "raw"
+PROCESSED_DIR = REPO_ROOT / "data" / "processed"
 
 
 @dataclass
 class ReparamConfig:
-    """Configuration for the ``(z, τ)`` reparameterization.
+    """Moneyness window and binning of the study panel.
 
     Parameters
     ----------
-    psi : float
-        Psychological-time scale (business days). Controls the log-compression of
-        the maturity axis; ψ ≈ 20–30 works well.
     z_min, z_max : float
-        Moneyness domain (e.g. −3 → ~3σ crash, +3 → ~3σ rally).
-    n_z_bins, n_tau_bins : int
-        Grid resolution along each axis.
-    hedge_frequency : str
-        Delta-hedging frequency assumed when forming delta-hedged P&L
-        ('daily', 'intraday', ...). A documented modelling choice, not a detail.
+        Moneyness window in units of sigma_ATM * sqrt(T).
+    n_z_bins : int
+        Number of uniform bins on the window.
     """
-    psi: float = 25.0
     z_min: float = -1.15
     z_max: float = 1.10
     n_z_bins: int = 8
-    n_tau_bins: int = 10
-    hedge_frequency: str = "daily"
 
 
 # ---------------------------------------------------------------------------
-# Reparameterization
+# Moneyness
 # ---------------------------------------------------------------------------
 
 def compute_moneyness(
@@ -87,104 +55,27 @@ def compute_moneyness(
     sigma: np.ndarray | float,
     T: np.ndarray | float,
 ) -> np.ndarray:
-    """Standard-deviation-to-expiry moneyness ``z = log(K/S) / (σ·√T)``.
+    """Moneyness in standard deviations to expiry, ``z = log(K/S) / (sigma sqrt(T))``.
 
     Parameters
     ----------
-    K : np.ndarray
-        Strike prices.
-    S : float
-        Current spot price.
-    sigma : np.ndarray or float
-        Annualized implied volatility (or √VSW) for each option.
-    T : np.ndarray or float
-        Time to expiry **in years** (annualized, to match ``sigma``).
-
-    Returns
-    -------
-    z : np.ndarray
-        Normalised moneyness. ``z = −3`` ≈ a 3σ crash strike, ``z = +2`` ≈ a 2σ
-        rally strike — independent of spot level or volatility regime.
-
-    Notes
-    -----
-    The ``√T`` factor is what makes ``z`` comparable across maturities. Omitting it
-    (the common ``log(K/S)/σ`` shortcut) only holds for a fixed-maturity slice or an
-    implicit total-variance convention.
+    K : strike(s)
+    S : spot
+    sigma : annualised volatility used for scaling (the study uses sigma_ATM)
+    T : time to expiry in years
     """
     return np.log(K / S) / (sigma * np.sqrt(T))
-
-
-def compute_psychological_time(
-    ttoexp: np.ndarray,
-    psi: float = 25.0,
-) -> np.ndarray:
-    """Psychological time ``τ = ψ·log(1 + T/ψ)``.
-
-    Spreads out short-dated options (where the surface is flexible) and compresses
-    long-dated ones (where it is stiff).
-
-    Parameters
-    ----------
-    ttoexp : np.ndarray
-        Time to expiry in business days.
-    psi : float
-        Scale parameter (business days). Default 25 ≈ 1 month.
-    """
-    return psi * np.log(1 + ttoexp / psi)
-
-
-def inverse_psychological_time(
-    tau: np.ndarray,
-    psi: float = 25.0,
-) -> np.ndarray:
-    """Invert the ``τ``-transform to recover time to expiry in business days."""
-    return psi * (np.exp(tau / psi) - 1)
-
-
-def build_grid(config: ReparamConfig | None = None) -> dict:
-    """Build the discretised ``(z, τ)`` grid for binning option data.
-
-    Returns
-    -------
-    grid : dict with keys ``z_edges``, ``z_centers``, ``tau_edges``,
-        ``tau_centers``, ``config``.
-    """
-    if config is None:
-        config = ReparamConfig()
-
-    z_edges = np.linspace(config.z_min, config.z_max, config.n_z_bins + 1)
-    z_centers = 0.5 * (z_edges[:-1] + z_edges[1:])
-
-    # τ range: from ~3 business days to ~250 business days
-    tau_min = compute_psychological_time(np.array([3.0]), config.psi)[0]
-    tau_max = compute_psychological_time(np.array([250.0]), config.psi)[0]
-    tau_edges = np.linspace(tau_min, tau_max, config.n_tau_bins + 1)
-    tau_centers = 0.5 * (tau_edges[:-1] + tau_edges[1:])
-
-    return {
-        "z_edges": z_edges,
-        "z_centers": z_centers,
-        "tau_edges": tau_edges,
-        "tau_centers": tau_centers,
-        "config": config,
-    }
 
 
 def preprocess_options_data(
     df: pd.DataFrame,
     config: ReparamConfig | None = None,
 ) -> pd.DataFrame:
-    """Add reparameterized ``(z, τ)`` coordinates to an options DataFrame.
+    """Add standardised moneyness ``z`` to an options DataFrame.
 
     Expects columns: ``spot``, ``strike``, ``ttoexp`` (business days),
-    ``implied_vol`` (annualized). Adds:
-
-    - ``T_years`` — time to expiry in years (``ttoexp / 252``)
-    - ``z``       — standard-deviation moneyness (with the √T scaling)
-    - ``tau``     — psychological time
-
-    Rows outside ``[z_min, z_max]`` are dropped.
+    ``implied_vol`` and ``sigma_atm`` (annualised). Adds ``T_years``
+    (``ttoexp / 252``) and ``z``. Rows outside ``[z_min, z_max]`` are dropped.
     """
     if config is None:
         config = ReparamConfig()
@@ -192,14 +83,8 @@ def preprocess_options_data(
     df = df.copy()
     df["T_years"] = df["ttoexp"].values / BDAYS_PER_YEAR
 
-    # Real data carries a per-(date, maturity) ATM vol; synthetic data does not. z is normalized by the ATM vol when available
     if "sigma_atm" not in df.columns:
-        raise KeyError(
-            "sigma_atm missing — did load_optionmetrics include it in "
-            "the returned columns? (Synthetic harness: pass a df with "
-            "sigma_atm set to implied_vol.)"
-        )
-
+        raise KeyError("sigma_atm missing: load data with load_optionmetrics")
 
     df["z"] = compute_moneyness(
         df["strike"].values,
@@ -207,66 +92,26 @@ def preprocess_options_data(
         df["sigma_atm"].values,
         df["T_years"].values,
     )
-    df["tau"] = compute_psychological_time(df["ttoexp"].values, psi=config.psi)
 
     mask = (df["z"] >= config.z_min) & (df["z"] <= config.z_max)
-    kept = df[mask]
-    lost = 1 - len(kept) / len(df)
-    '''if lost > 0.02:
-        warnings.warn(f"z-clip dropped {lost:.1%} of rows "
-                      f"(range [{config.z_min}, {config.z_max}])")'''
-    return kept.reset_index(drop=True)
     return df[mask].reset_index(drop=True)
 
 
 # ---------------------------------------------------------------------------
-# Data loading — synthetic (harness) and real (study)
+# Loading
 # ---------------------------------------------------------------------------
 
-def load_synthetic_data(filepath: str = "data/synthetic/spde_dataset.npz") -> dict:
-    """Load a simulated dataset produced by the validation harness.
-
-    Returns the same dict shape as ``simulate.generate_synthetic_dataset`` so the
-    downstream pipeline is identical for synthetic and real inputs.
-    """
-    npz = np.load(filepath)
-    return {
-        "z_grid": npz["z_grid"],
-        "surface": npz["surface"],
-        "returns": npz["returns"],
-    }
-
-
-def load_options_data(filepath: str) -> pd.DataFrame:
-    """Load raw real options data from CSV/Parquet.
-
-    Expected columns:
-        date, spot, strike, ttoexp, mid_price, option_type, implied_vol
-
-    Adapt to whatever real source you commit to (OptionMetrics/IvyDB, Deribit, ...).
-    """
-    if filepath.endswith(".parquet"):
-        df = pd.read_parquet(filepath)
-    else:
-        df = pd.read_csv(filepath, parse_dates=["date"])
-
-    required = ["date", "spot", "strike", "ttoexp", "mid_price", "option_type"]
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        raise ValueError(f"Missing required columns: {missing}")
-    return df
-
-
 def load_optionmetrics(
-    surface_path: str = "E:/Projects/vol-surface-dynamics/data/raw/spx_vsurface.parquet",
-    spot_path: str = "E:/Projects/vol-surface-dynamics/data/raw/spx_spot.parquet",
+    surface_path: str | Path = RAW_DIR / "spx_vsurface.parquet",
+    spot_path: str | Path = RAW_DIR / "spx_spot.parquet",
     otm_only: bool = True,
 ) -> pd.DataFrame:
     """Load SPX smoothed vol surfaces (IvyDB vsurfd) into pipeline schema.
 
-    Decisions (see README): vendor impl_strike as the strike (D1);
-    OTM-only stitching via |delta| <= 50 (D2); calendar->business
-    days via 252/365 (D3); usable z-range ~[-1.15, 1.10] (D4).
+    Files are written by ``scripts/pull_wrds.py``. Decisions (see README):
+    vendor impl_strike as the strike (D1); OTM-only stitching via
+    |delta| <= 50 (D2); calendar -> business days via 252/365 (D3);
+    usable z-range [-1.15, 1.10] (D4). Numeric columns are coerced on load.
     """
     surf = pd.read_parquet(surface_path)
     spot = pd.read_parquet(spot_path)
@@ -306,53 +151,6 @@ def load_optionmetrics(
          "mid_price", "option_type",
          "implied_vol", "sigma_atm", "delta"]
     ].reset_index(drop=True)
-
-
-'''def load_deribit(*args, **kwargs) -> pd.DataFrame:
-    """Load BTC/ETH option history from Deribit's public API.
-
-    Free, several years of liquid crypto-option history; bridges to a later
-    crypto-perps project. Surfaces are younger/weirder than equity index — which
-    makes the 'where does the membrane picture break' question more interesting.
-
-    TODO (Phase 1): implement the API pull + schema mapping.
-    """
-    raise NotImplementedError(
-        "Deribit loader — implement in Phase 1 (public API → standard schema)."
-    )
-
-
-def load_yfinance_snapshot(*args, **kwargs) -> pd.DataFrame:
-    """Pull a current option chain via yfinance for a sanity check ONLY.
-
-    yfinance gives current chains, not deep history, so it cannot drive the
-    time-series PCA at the core of this project. Use it to validate plumbing or to
-    accumulate data going forward — do not build the study on it.
-
-    TODO (Phase 1): implement the snapshot pull.
-    """
-    raise NotImplementedError(
-        "yfinance snapshot — implement as a sanity check; not a basis for the study."
-    )'''
-
-
-def compute_delta_hedged_pnl_series(
-    df: pd.DataFrame,
-    config: ReparamConfig | None = None,
-) -> pd.DataFrame:
-    """Form the delta-hedged P&L time series on the ``(z, τ)`` grid.
-
-    This is the quantity whose cross-grid correlations PCA decomposes. The result
-    depends on ``config.hedge_frequency`` — a documented modelling choice (see the
-    module docstring), since "continuous" hedging is a fiction.
-
-    TODO (Phase 1/2): bin options onto the grid, difference prices, subtract the
-    delta hedge at the chosen frequency, and align across dates.
-    """
-    raise NotImplementedError(
-        "Delta-hedged P&L series — implement in Phase 1/2; document the hedging "
-        "frequency assumption explicitly."
-    )
 
 
 def build_surface_panel(
@@ -450,9 +248,7 @@ def build_study_panel(
     return out
 
 
-STUDY_SPECTRUM_PATH = (
-    Path(__file__).resolve().parent.parent / "data" / "processed" / "study_spectrum.npz"
-)
+STUDY_SPECTRUM_PATH = PROCESSED_DIR / "study_spectrum.npz"
 
 
 def load_study_spectrum(path: str | Path | None = None) -> dict:

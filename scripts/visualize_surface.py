@@ -1,14 +1,18 @@
+"""Animate the 30-day SPX smile in z-coordinates (writes figures/smile_30d.gif).
+
+    python -m scripts.visualize_surface
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 from src.data_pipeline import (
-    ReparamConfig, load_optionmetrics, preprocess_options_data,
+    ReparamConfig, STUDY_MATURITY_DAYS, load_optionmetrics, preprocess_options_data,
 )
 from pathlib import Path
 
 wide = ReparamConfig(z_min=-5.0, z_max=5.0)
 out = preprocess_options_data(load_optionmetrics(), wide)
-s30 = out[out["days"] == 30].sort_values(["date", "z"])
+s30 = out[out["days"] == STUDY_MATURITY_DAYS].sort_values(["date", "z"])
 
 groups = dict(list(s30.groupby("date")))
 dates = sorted(groups)

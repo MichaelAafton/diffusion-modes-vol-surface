@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from src.pca import run_pca, rolling_pca, align_eigenvector_signs, project_onto_factors
+from src.pca import run_pca, project_onto_factors, sign_changes, slope
 from src.simulate import generate_synthetic_dataset
 
 
@@ -24,15 +24,9 @@ class TestRunPCA:
         for i in range(len(result.eigenvalues) - 1):
             assert result.eigenvalues[i] >= result.eigenvalues[i + 1]
 
-    def test_explained_variance_sums_to_less_than_one(self, synthetic_returns):
-        result = run_pca(synthetic_returns, n_components=5)
-        assert result.explained_variance_ratio.sum() <= 1.0 + 1e-6
-
-    def test_first_mode_dominates(self, synthetic_returns):
-        """For heat equation data, mode 0 should explain the most variance."""
-        result = run_pca(synthetic_returns, n_components=5)
-        # Mode 0 should have the largest eigenvalue
-        assert result.explained_variance_ratio[0] == result.explained_variance_ratio.max()
+    def test_shares_sum_to_one_with_all_components(self, synthetic_returns):
+        result = run_pca(synthetic_returns)
+        assert result.explained_variance_ratio.sum() == pytest.approx(1.0, abs=1e-10)
 
     def test_eigenvectors_orthogonal(self, synthetic_returns):
         result = run_pca(synthetic_returns, n_components=5)
@@ -53,35 +47,23 @@ class TestRunPCA:
         np.testing.assert_array_almost_equal(diag, np.ones_like(diag), decimal=5)
 
 
-class TestRollingPCA:
-    def test_rolling_output_length(self):
-        dataset = generate_synthetic_dataset(n_days=600, seed=42)
-        results = rolling_pca(dataset["returns"], window_size=250, step_size=50)
-        # (599 - 250) / 50 + 1 = 7.98 → 7 windows
-        assert len(results) >= 5
-
-    def test_rolling_consistency(self):
-        """Each window should produce valid PCA results."""
-        dataset = generate_synthetic_dataset(n_days=600, seed=42)
-        results = rolling_pca(dataset["returns"], window_size=250, step_size=100, n_components=3)
-        for r in results:
-            assert r.eigenvalues.shape == (3,)
-            assert all(r.eigenvalues[i] >= r.eigenvalues[i + 1] for i in range(2))
-
-
-class TestAlignSigns:
-    def test_sign_alignment(self):
-        """Flipped vectors should be realigned."""
-        v1 = np.array([[1, 2, 3], [4, 5, 6]])
-        v2 = np.array([[-1, -2, -3], [4, 5, 6]])  # mode 0 flipped
-        aligned = align_eigenvector_signs([v1, v2])
-        # After alignment, both should point the same way as v1
-        assert np.dot(aligned[1][0], v1[0]) > 0
-
-
 class TestProjectOntoFactors:
     def test_projection_shape(self):
         dataset = generate_synthetic_dataset(n_days=200, n_z=20, seed=42)
         result = run_pca(dataset["returns"], n_components=5)
         factors = project_onto_factors(dataset["returns"], result.eigenvectors)
         assert factors.shape == (199, 5)
+
+
+class TestSpectralSummaries:
+    def test_slope_recovers_power_law(self):
+        k = np.arange(2, 8)
+        assert slope(3.0 * k ** -4.4, k_start=2) == pytest.approx(4.4, rel=1e-9)
+
+    def test_slope_ignores_floor(self):
+        evr = np.array([0.5, 0.125, 0.0])
+        assert slope(evr) == pytest.approx(2.0, rel=1e-9)
+
+    def test_sign_changes(self):
+        assert sign_changes(np.array([-1, -1, 1, 1])) == 1
+        assert sign_changes(np.array([1, -1, 1, -1])) == 3
