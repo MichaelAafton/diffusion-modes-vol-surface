@@ -8,285 +8,302 @@
 \usepackage{caption}
 \captionsetup{font=small,labelfont=bf}
 
-\title{\textbf{Diffusive and Bending Modes of the S\&P~500 Implied-Volatility Surface:\\ A Field-Theory Factor Model Tested Out of Sample}}
-\author{Alexander~Pascal\\ Department of Physics, King's College London\\ \small\texttt{github.com/MichaelAafton/diffusion-modes-vol-surface}}
-\date{September 2026}
+\title{\textbf{Spectral Structure of the 30 Day SPX Implied Volatility Smile\\ in Vendor Smoothed Surfaces}}
+\author{Alexander~Pascal\\ Department of Physics, King's College London\\ \small\url{https://github.com/MichaelAafton/diffusion-modes-vol-surface}}
+\date{October 2026}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-\noindent We test whether the day-to-day dynamics of the S\&P~500 implied-volatility smile are consistent with a stochastic heat equation, using ten years (2015--2024) of OptionMetrics IvyDB volatility surfaces. A validated synthetic harness establishes the correct null prediction: for daily \emph{changes}, an Ornstein--Uhlenbeck mode obeys $\mathrm{Var}(\Delta f_k)=2V_k(1-e^{-\gamma_k\,dt})$, not the na\"ive $k^{-2}$ stationary law. Against this corrected null, pure diffusion is decisively rejected: across a matched-instrument parameter sweep, its spectral slope saturates at $p\le1.87$, versus $p\approx2.5$--$2.6$ observed in the tail of the real spectrum. A three-parameter composite model, an external volatility-level factor riding on a membrane with both tension and bending rigidity, $\gamma_k = Dk^2+\kappa k^4$, reproduces the full eight-point empirical spectrum. Formal calibration with block-bootstrap errors yields $D=0.69\;[0.29,1.25]$, $\kappa=0.011\;[0.006,0.020]$, and a diffusion-to-bending crossover $k^\ast=7.9\;[5.1,11.2]$ at the upper edge of the observable band ($\chi^2/\mathrm{dof}=3.6$). The sole significant residual is a mode-5 ``shelf'' ($z=-3.0$). In a chronological out-of-sample test (train through 2022-01-05, test through 2024-12-31), the three-parameter field theory predicts portfolio risk within $1\%$ of an empirical three-factor model on level, straddle, and risk-reversal exposures, while a butterfly portfolio loading precisely modes 3--5, exposes the same spectral residual in money terms, over-predicted $2.2\times$. The smile behaves as a stiff membrane plus an external level factor; where the picture fails is localised, twice measured, and characterised.
+\noindent I study the principal components of daily changes in the 30 day implied volatility smile of the S\&P~500 index, using ten years of OptionMetrics volatility surfaces (2015 to 2024). A level factor carries 94.4\% of the variance and a second factor 4.7\%. The remaining modes fall off as a power law with exponent $p=4.44$ (95\% bootstrap interval 4.18 to 4.67). Simulated diffusion with a level factor, passed through the same panel construction, never exceeds $p=2.63$, so a diffusing membrane observed directly cannot produce this tail. The surfaces are not observed directly, however. The vendor builds them with a Gaussian kernel, and when simulated diffusion is passed through that kernel its tail exponent falls between 4.2 and 4.5, inside the measured interval. The shape does not match: smoothed diffusion bends sharply downward on log scales while the measured spectrum stays close to a straight line. The second factor is partly tied to the seam between the separately smoothed call and put halves of the surface ($R^2=0.57$, interval 0.43 to 0.68), and several modes show negative autocorrelation over two to five days. With this instrument the question of which operator governs the smile cannot be settled. I describe the measurement that would settle it.
 \end{abstract}
 
 \section{Introduction}
 
-The implied-volatility surface of a liquid index \cite{gatheral} is not static: it breathes daily, and the structure of that breathing determines the risk of every option portfolio. A long-standing physics-inspired proposal \cite{lecoz,bouchaud,cont}\footnote{The project was directly inspired by an unpublished presentation, \emph{A Data-Driven Factor Model for Option Risk}, by P.~Ioselevich (Capital Fund Management), for which no citable published version exists.} treats the surface as an elastic membrane: local supply--demand shocks perturb it, and an effective stiffness propagates and damps the perturbations. In its simplest form the proposal is a stochastic heat equation,
+The implied volatility smile of a liquid index changes every day, and the structure of those changes determines the risk of any portfolio of options. Principal component analysis of daily changes is the standard way to describe that structure. Cont and da Fonseca \cite{cont} found that a few factors, which can be read as level, slope and curvature, account for most of the daily variation of implied volatility surfaces.
+
+A physical reading of the same decomposition treats the smile as an elastic membrane. Local shocks deform it, and an effective stiffness spreads and damps the deformation. Le Coz and Bouchaud \cite{lecoz} develop this kind of model for the forward rate curve. For the smile, the simplest version is a stochastic heat equation on a moneyness axis $z$,
 \begin{equation}
 \partial_t p(z,t) \;=\; D\,\partial_z^2 p(z,t) + \xi(z,t),
 \label{eq:spde}
 \end{equation}
-for the perturbation field $p$ on a moneyness axis $z$, with white noise $\xi$. Decomposed in Fourier modes, each amplitude is an independent Ornstein--Uhlenbeck (OU) process with relaxation rate $\gamma_k = Dk^2$, so the stationary mode variances scale as $k^{-2}$ and principal-component analysis (PCA) of surface co-movement should recover sinusoidal eigenvectors with a $k^{-2}$ eigenvalue decay.
+where $p$ is the deviation of implied volatility from its average shape and $\xi$ is white noise. If this picture holds, the principal components of daily changes should look like the modes of Eq.~\eqref{eq:spde} and their variances should fall off in a specific way with mode number.
 
-This paper tests that prediction against real S\&P~500 (SPX) surfaces and reports, as its central results, the two places the prediction fails and the minimal extension that repairs them. The design principle throughout is that synthetic data is a \emph{validation harness}, never evidence: simulations prove the pipeline recovers known ground truth; only real data can support or falsify the physical hypothesis; and deviations from the diffusive picture are the scientific product, not a defect.
+This paper set out to test that prediction on SPX data. The test turned into a study of the instrument. The surfaces come from a vendor who smooths raw option prices with a kernel before publication, and that smoothing reshapes the spectrum enough to change the answer. The findings are:
 
-The contributions are:
 \begin{enumerate}
-\item \textbf{A corrected null hypothesis.} The $k^{-2}$ law governs mode \emph{levels}; PCA is necessarily run on daily \emph{changes} (for stationarity), whose spectrum obeys the OU increment law $\mathrm{Var}(\Delta f_k)=2V_k(1-e^{-\gamma_k dt})$: flat for slow modes, $\propto k^{-2}$ for fast ones. Testing real data against the wrong null materially changes conclusions (Sec.~\ref{sec:harness}).
-\item \textbf{Falsification of pure diffusion.} Through a matched instrument (identical grid, horizon, differencing, and estimator for synthetic and real data), no diffusion constant reproduces the observed spectrum: full-spectrum slope saturates at $p\le1.78$ and tail slope at $p\le1.87$, versus real values of $2.99$--$3.20$ and $2.53$--$2.64$ (Sec.~\ref{sec:adjudication}).
-\item \textbf{A three-parameter composite that works.} An external level factor plus a membrane with bending rigidity, $\gamma_k=Dk^2+\kappa k^4$, reproduces the eight-point spectrum, including an untuned match of the smallest eigenvalue. Formal calibration with block-bootstrap uncertainties places the diffusion-to-bending crossover at the top of the observable band (Sec.~\ref{sec:calibration}).
-\item \textbf{An out-of-sample risk test through a regime change.} Trained before 2022 and tested on 2022--2024, the three-parameter theory matches a 36-parameter empirical factor model to within $1\%$ on three of four standard portfolios; the fourth (butterfly) independently rediscovers the calibration's one significant residual in money terms (Sec.~\ref{sec:oos}).
+\item The 30 day smile has a dominant level factor (94.4\% of daily variance) and a second factor (4.7\%), followed by a tail that falls as $k^{-4.44}$ over modes 2 to 7.
+\item Diffusion observed without smoothing is ruled out. Through the identical panel construction its tail exponent never exceeds 2.63.
+\item The vendor's kernel accounts for the steepness of the tail but not its shape. Smoothed diffusion matches the exponent and fails on the profile.
+\item Between 43\% and 68\% of the variance of the second factor moves with the gap between call and put volatilities at the money, which the vendor's separate smoothing of calls and puts can produce.
+\item Several modes are negatively autocorrelated over two to five days, a pattern that measurement noise alone does not create. Its source is not identified.
 \end{enumerate}
 
-Section~\ref{sec:theory} develops the theory, Sec.~\ref{sec:data} the data and instrument, and Sec.~\ref{sec:discussion} discusses limitations, the decision log, and future work.
+Section~\ref{sec:theory} sets out the membrane model and the prediction for daily changes. Section~\ref{sec:data} describes the data, the panel and the vendor's kernel, and Sec.~\ref{sec:validation} the checks on the code. Sections~\ref{sec:spectrum} to \ref{sec:relax} report the measurements and tests, and Sec.~\ref{sec:discussion} discusses what the instrument can and cannot decide. The decision rules for the tests were written down before the tests were run; Appendix~\ref{app:ledger} records them together with the one rule that was amended after its results existed. This version replaces an earlier draft whose results came from a flawed panel; Appendix~\ref{app:corrections} lists the corrections.
 
-\section{Theoretical framework}
+\section{The membrane model and its prediction for daily changes}
 \label{sec:theory}
 
-\subsection{Modes, levels, and the increment law}
-
-On a finite $z$-domain of length $L$ with the operator $\mathcal{L}$, the field decomposes onto the cosine basis $\varphi_k(z)=\sqrt{2/L}\cos\!\big(k\pi(z-z_{\min})/L\big)$, $k=1,\dots$ Each amplitude obeys an OU equation $\dot f_k = -\gamma_k f_k + \xi_k$, whose stationary variance is
+On a moneyness window $[z_{\min},z_{\max}]$ of length $L$ with reflecting (Neumann) boundaries, the field decomposes onto cosine modes $\varphi_k(z)=\sqrt{2/L}\,\cos\!\big(q_k(z-z_{\min})\big)$ with wavenumbers $q_k=k\pi/L$. Each mode amplitude follows an Ornstein Uhlenbeck (OU) process $\dot f_k=-\gamma_k f_k+\xi_k$ with stationary variance $V_k=\sigma^2/(2\gamma_k)$. I allow a bending term alongside diffusion,
 \begin{equation}
-V_k=\frac{\sigma^2}{2\gamma_k}.
-\end{equation}
-For pure diffusion $\gamma_k = Dk^2$, giving the $k^{-2}$ level spectrum. We consider the extended operator
-\begin{equation}
-\gamma_k \;=\; D k^{2} + \kappa k^{4},
+\gamma_k \;=\; D\,q_k^{2} + \kappa\, q_k^{4},
 \label{eq:operator}
 \end{equation}
-in which $\kappa$ is a bending rigidity (the operator of a stiff plate rather than a tense membrane). The two regimes exchange dominance at the crossover wavenumber
-\begin{equation}
-k^\ast=\sqrt{D/\kappa}.
-\end{equation}
+so that $\kappa=0$ is pure diffusion and $D$ and $\kappa$ have units of $z^2$ and $z^4$ per day.
 
-Volatility levels are nearly integrated (close to a random walk), so PCA is performed on daily changes $\Delta\sigma$, which are approximately stationary. The correct null for a change-based spectrum follows from the exact OU transition $f(t+dt)=f\,e^{-\gamma dt}+\eta$, $\eta\sim\mathcal N\!\big(0,V(1-e^{-2\gamma dt})\big)$: writing $a=e^{-\gamma dt}$ and using independence of $\eta$ from $f$,
+Implied volatility levels are close to a random walk, so the analysis uses daily changes. For a mode sampled at interval $dt$, write $a=e^{-\gamma\,dt}$. The exact OU transition is $f(t+dt)=a\,f(t)+\eta$ with $\eta$ independent of $f(t)$ and $\mathrm{Var}(\eta)=V(1-a^2)$, so
 \begin{equation}
 \mathrm{Var}(\Delta f)\;=\;V(1-a)^2+V(1-a^2)\;=\;2V\big(1-e^{-\gamma\,dt}\big).
 \label{eq:increment}
 \end{equation}
-Equation~\eqref{eq:increment} has two personalities: for slow modes ($\gamma dt\ll1$) it reduces to $\sigma^2 dt$, \emph{independent of} $k$, all slow modes take the same daily kick, flattening the spectrum's head, while fast modes ($\gamma dt\gg1$) decorrelate fully between observations and inherit the level law $2V_k\propto\gamma_k^{-1}$. Any inference that compares a change-based empirical spectrum with the level law conflates these regimes; correcting this changed our own conclusions materially (Sec.~\ref{sec:adjudication}).
+For slow modes ($\gamma\,dt\ll1$) this tends to $\sigma^2 dt$, independent of $k$. For fast modes it tends to $2V\propto\gamma^{-1}$. A spectrum of daily changes is therefore flatter than the familiar $k^{-2}$ law for levels, and the steepest it can be under pure diffusion is the fast limit.
 
-\subsection{Composite model}
-
-Empirically (Sec.~\ref{sec:spectrum}) one mode dominates changes with a near-uniform profile across $z$: the entire smile repricing with the volatility level. We model it as an \emph{external} scalar factor $f_0(t)$, an AR(1) with its own persistence and daily-kick variance $m$, added uniformly across $z$, rather than as the operator's $k{=}0$ mode. The model covariance of daily changes at grid points $z_i,z_j$ is then an exact finite sum,
+The same transition fixes the autocorrelation of daily changes, which Sec.~\ref{sec:relax} uses. For lag $h\ge1$,
 \begin{equation}
-\mathrm{Cov}(\Delta p_i,\Delta p_j) \;=\; \sum_{k=1}^{n} \varphi_k(z_i)\,\varphi_k(z_j)\; 2V_k\big(1-e^{-\gamma_k dt}\big)\;+\;m,
+\mathrm{Corr}(\Delta f_t,\Delta f_{t+h}) \;=\; -\tfrac12\,(1-a)\,a^{h-1}.
+\label{eq:acf}
+\end{equation}
+Independent measurement noise added to the levels also produces a lag one correlation of $-\tfrac12$ in the changes, but it leaves all longer lags at zero. Negative correlation at lags of two days or more therefore points to relaxation on a scale of days. Relaxation much faster than one day ($a\to0$) cannot be distinguished from noise at daily sampling.
+
+Daily changes of the real smile are dominated by a component that moves the whole smile together. I model it as a separate level factor that adds a uniform variance $m$ to every point, so the covariance of daily changes at points $z_i$ and $z_j$ is
+\begin{equation}
+\mathrm{Cov}(\Delta p_i,\Delta p_j) \;=\; \sum_{k} \varphi_k(z_i)\,\varphi_k(z_j)\; 2V_k\big(1-e^{-\gamma_k dt}\big)\;+\;m .
 \label{eq:forward}
 \end{equation}
-which, correlation-normalised and eigendecomposed, yields deterministic model variance shares in microseconds, the forward model used for calibration, with no simulation in the optimisation loop.
+Normalising this to a correlation matrix and diagonalising it gives the variance shares the model predicts for the panel. I summarise a spectrum by its tail exponent $p$, the slope of a least squares fit of $\log\lambda_k$ against $\log k$ over modes $k=2,\dots,7$, and by the local slopes between neighbouring modes.
 
-\section{Data and instrument}
+\section{Data, panel and the vendor's kernel}
 \label{sec:data}
 
-\subsection{Source and design decisions}
+\subsection{Data}
 
-Data are OptionMetrics IvyDB smoothed volatility surfaces (WRDS, \texttt{vsurfd}) for SPX (secid 108105), 2015--2024 ($\sim$2{,}500 trading days), pulled once and frozen to Parquet; spot from \texttt{secprd}. The surface supplies interpolated implied volatilities on fixed (maturity, delta) pillars together with the vendor's implied strike. We study the 30-calendar-day maturity slice. Key measurement decisions (the project maintains a numbered decision log, D1--D9; Appendix~\ref{app:dlog}):
+The data are OptionMetrics IvyDB standardised volatility surfaces for SPX (table \texttt{vsurfd}, secid 108105) from 2 January 2015 to 31 December 2024, with the index level from \texttt{secprd}. The surface gives implied volatility at fixed maturities and fixed deltas, together with the strike that the vendor's own model implies for each pillar. I use the 30 calendar day maturity.
 
-\begin{itemize}
-\item \textbf{Strike from vendor \texttt{impl\_strike}} (D1): self-consistent with the vendor's own surface construction; fewest moving assumptions.
-\item \textbf{OTM-only stitching} (D2): retain $|\Delta|\le0.5$, so out-of-the-money puts populate $z<0$ and OTM calls $z>0$, each half of the axis represented by its liquid instrument.
-\item \textbf{Calendar$\to$business-day conversion} (D3): surface maturities are calendar days; the pipeline's annualisation uses 252. Omitting the $252/365$ conversion silently shrinks every $z$ by $\sim$17\%.
-\item \textbf{ATM-normalised moneyness} (D4): $z=\log(K/S)/(\sigma_{\mathrm{ATM}}\sqrt{T})$ with $\sigma_{\mathrm{ATM}}$ the per-(date, maturity) 50-delta call/put average. Normalising by each option's \emph{own} implied volatility makes the coordinate self-referential (a relabelling of delta); the ATM ruler is essential. The missing-$\sigma_{\mathrm{ATM}}$ path raises a hard error rather than falling back silently.
-\end{itemize}
+\subsection{Moneyness and panel construction}
 
-The delta-pillar grid ($|\Delta|\in[0.10,0.90]$, steps of $0.05$) maps to a usable window $z\in[-1.15,\,1.10]$; $13.3\%$ of raw rows (nearly all deep OTM puts) lie outside it. The pillar spacing supports $\approx8$ uniform bins, finer binning would manufacture resolution the instrument does not possess. \emph{The instrument's field of view and mode ceiling are properties of the data source, not of the market}; modes beyond $k\approx8$ are unobservable here.
+Each pillar is placed at
+\begin{equation}
+z \;=\; \frac{\log(K/S)}{\sigma_{\mathrm{ATM}}\sqrt{T}},
+\end{equation}
+where $K$ is the vendor's implied strike, $S$ the index level, $T$ the maturity in years and $\sigma_{\mathrm{ATM}}$ the average of the 50 delta call and put volatilities on that day. Using the vendor's strike keeps the coordinate consistent with the vendor's own pricing assumptions. Scaling by $\sigma_{\mathrm{ATM}}$ rather than by each pillar's own volatility avoids a coordinate that merely relabels delta. Calendar days are converted to the 252 day trading year before computing $T$.
 
-\subsection{Panel construction}
+Only out of the money pillars are kept ($|\Delta|\le0.50$), so puts populate $z<0$ and calls $z>0$ and each side of the smile comes from its more liquid instrument. Pillars are averaged within 8 equal bins on $z\in[-1.15,1.10]$, the window the delta grid can fill. A bin is kept if it has data on at least 95\% of days, and days with any empty kept bin are then dropped. The deepest put bin has data on only 89.1\% of days and is dropped. The panel is 2498 days by 7 bins, with bin centres at $z=-0.728,\,-0.447,\,-0.166,\,0.116,\,0.397,\,0.678,\,0.959$. The analysis variable is the daily change in implied volatility. It differs from delta hedged option returns by the gamma and theta carry, which mainly affects the level factor; the interpretation of mode 1 carries that caveat.
 
-Each option's $z$ is binned (\,8 uniform bins on $[-1.15,1.10]$\,) and implied vols averaged per (date, bin). A pre-registered 95\% coverage rule removes underpopulated bins; with clean numeric dtypes the panel is complete: $2{,}499\times8$ with no missing cells. (An earlier ``seven-bin'' panel was traced to vendor \texttt{Decimal}/\texttt{None} semantics silently corrupting coverage counts; column types are now coerced and unit-tested at the loader.) The analysis variable is the daily change $\Delta\sigma(z)$ (D5): stationary, matched to the harness-validated increment theory, and free of a hedging-frequency assumption. The caveat is inherited honestly: daily $\Delta\sigma$ at fixed $z$ differs from delta-hedged P\&L by gamma--theta carry, approximately a rank-one contamination concentrated in the level mode; interpretation of mode~1 carries an asterisk, modes $\ge2$ are robust.
+\subsection{The vendor's kernel}
 
-\section{Validation harness}
-\label{sec:harness}
+According to the IvyDB reference manual \cite{ivydb}, the volatility at each pillar $j$ is a weighted average of the implied volatilities $\sigma_i$ of all options on that day,
+\begin{equation}
+\hat\sigma_j \;=\; \frac{\sum_i V_i\,\Phi(x_{ij},y_{ij},z_{ij})\,\sigma_i}{\sum_i V_i\,\Phi(x_{ij},y_{ij},z_{ij})},\qquad
+\Phi \;\propto\; \exp\!\Big(-\frac{x^2}{2h_1}-\frac{y^2}{2h_2}-\frac{z^2}{2h_3}\Big),
+\end{equation}
+where $V_i$ is the option's vega, $x_{ij}=\log(T_i/T_j)$, $y_{ij}$ is the difference in call equivalent delta (delta for a call, one plus delta for a put) and $z_{ij}$ is 0 if the two are the same type and 1 otherwise. The bandwidths are $h_1=0.05$, $h_2=0.005$ and $h_3=0.001$, and options with vega below 0.5 are excluded.
 
-The simulator evolves each mode by the \emph{exact} OU transition (zero discretisation error; unconditionally stable; initialised in stationarity), reconstructing $p(z,t)$ on the sampled cosine basis, with the level factor gated behind a configuration flag. The harness's purpose is falsification-grade validation of the pipeline: simulate, difference, run the \emph{identical} PCA, and require the empirical spectrum to match Eq.~\eqref{eq:increment}'s prediction, which it does to $\lesssim0.2$ percentage points per mode over $20{,}000$ synthetic days; the comparison is frozen as a permanent unit test. Two methodological rules emerged and are enforced throughout: (i)~\emph{aliasing control}: the number of simulated modes equals the number of grid points ($n_{\mathrm{modes}}=n_z$), since coarse sampling folds unrepresented high-$k$ variance into low modes and spuriously steepens spectra; (ii)~numerical guards are derived, not inherited, exponential underflow ($e^{-\gamma dt}\!\to\!0$) is the \emph{benign} exact-update limit (the mode redraws from its stationary law), unlike the instability of Euler--Maruyama at large $\gamma dt$.
+Two consequences matter here. First, $\sqrt{h_2}\approx0.07$ in delta is wider than the 0.05 spacing between pillars, so neighbouring pillars share most of their inputs. Second, the weight between a call and a put is $e^{-500}$, so the two halves of the surface are built from disjoint sets of options. Because of the stitching rule above, the put side of the panel comes entirely from the put surface and the call side from the call surface, and the two meet at the money. The kernel is therefore part of the measurement. Any statement about the dynamics of the smile has to pass through it.
 
-\section{The empirical spectrum}
+\section{Validation}
+\label{sec:validation}
+
+The simulator evolves each mode with the exact OU transition, so there is no time discretisation error, and adds an optional level factor. A unit test simulates 20{,}000 days on a 50 point grid and checks that PCA of the daily changes recovers the variance shares of Eq.~\eqref{eq:increment} to within 1.2 percentage points per mode. A second test checks the analytic covariance of Eq.~\eqref{eq:forward}, evaluated at the panel's bin centres with 40 modes, against direct simulation; the four leading shares agree to within 10\%. Agreement on synthetic data checks the code. It is not evidence about the market.
+
+\section{The measured spectrum}
 \label{sec:spectrum}
+
+Uncertainties throughout come from a moving block bootstrap of the daily changes (blocks of 25 days, 1000 replicates), which preserves volatility clustering.
 
 \begin{table}[t]
 \centering
-\caption{Empirical variance shares of daily $\Delta\sigma$ across 8 $z$-bins (2{,}498 changes), with moving-block bootstrap uncertainty (block $=25$ days, $1{,}000$ replicates).}
+\caption{Variance shares of the principal components of daily changes (2497 changes, 7 bins). The tail columns give each mode's share of the variance of modes 2 to 7 combined. Brackets are 95\% bootstrap intervals.}
 \label{tab:spectrum}
-\begin{tabular}{cccc}
+\begin{tabular}{ccccc}
 \toprule
-Mode & Share & Boot.\ std & 95\% CI \\
+Mode & Share (\%) & 95\% interval & Share of tail & 95\% interval \\
 \midrule
-1 & 0.9150 & 0.0062 & [0.9043, 0.9286] \\
-2 & 0.0493 & 0.0056 & [0.0358, 0.0552] \\
-3 & 0.0164 & 0.0041 & [0.0109, 0.0260] \\
-4 & 0.0067 & 0.0013 & [0.0058, 0.0108] \\
-5 & 0.0064 & 0.0007 & [0.0046, 0.0071] \\
-6 & 0.0029 & 0.0005 & [0.0020, 0.0041] \\
-7 & 0.0019 & 0.0003 & [0.0014, 0.0024] \\
-8 & 0.0014 & 0.0002 & [0.0010, 0.0018] \\
+1 & 94.37 & [93.59, 95.17] & & \\
+2 & 4.71 & [3.94, 5.46] & 0.837 & [0.798, 0.865] \\
+3 & 0.63 & [0.49, 0.82] & 0.112 & [0.089, 0.148] \\
+4 & 0.17 & [0.13, 0.21] & 0.030 & [0.023, 0.039] \\
+5 & 0.07 & [0.05, 0.08] & 0.013 & [0.010, 0.014] \\
+6 & 0.03 & [0.02, 0.04] & 0.006 & [0.004, 0.008] \\
+7 & 0.02 & [0.01, 0.02] & 0.003 & [0.002, 0.004] \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:spectrum} reports the correlation-matrix PCA of the real $\Delta\sigma$ panel. Structural findings:
+\begin{table}[t]
+\centering
+\caption{Loadings of the first three modes on the seven bins. Signs are fixed so that mode 1 has a positive sum, mode 2 is positive at the call side edge and mode 3 is positive at its largest loading.}
+\label{tab:loadings}
+\begin{tabular}{lccccccc}
+\toprule
+Bin centre $z$ & $-0.728$ & $-0.447$ & $-0.166$ & $0.116$ & $0.397$ & $0.678$ & $0.959$ \\
+\midrule
+Mode 1 & 0.377 & 0.378 & 0.376 & 0.386 & 0.380 & 0.377 & 0.373 \\
+Mode 2 & $-0.403$ & $-0.414$ & $-0.423$ & 0.043 & 0.330 & 0.424 & 0.444 \\
+Mode 3 & $-0.039$ & 0.078 & 0.279 & $-0.522$ & $-0.508$ & 0.131 & 0.605 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\textbf{Mode shapes.} Mode~1 is uniform and positive across $z$ (entries $0.342$--$0.366\approx1/\sqrt8$; zero sign changes): the level mode, owning $91.5\%$ of daily-change variance. Mode~2 is a one-node see-saw, put wing against call wing: the skew mode. Both are stable under removal of the outermost put bin. Mode~3 fails the harmonic test: its shape is a dipole concentrated on the outermost bins that \emph{follows the boundary} when the edge bin is removed, and its node count is unstable ($2\to4$). Physics lives at a location; artifacts live at the boundary. Node-counting evidence for membrane structure therefore stops, by diagnosis rather than oversight, at mode~2. Both diagnostics are shown in Fig.~\ref{fig:modes}.
+Table~\ref{tab:spectrum} gives the spectrum and Table~\ref{tab:loadings} the leading mode shapes. Mode 1 is almost exactly uniform and is the level of the smile. Mode 2 is not the smooth tilt a membrane would produce. It is roughly constant across the three put side bins, roughly constant across the three call side bins, and changes sign in the bin that contains the at the money pillars, where the two surfaces meet. Mode 3 concentrates on the two bins just above the money ($z=0.116$ and $0.397$) and on the outermost call bin, and has no clean harmonic form.
+
+The tail exponent over modes 2 to 7 is $p=4.44$, with interval 4.18 to 4.67. The local slopes between neighbouring modes are 4.97, 4.54, 3.94, 4.42 and 3.72, with intervals [4.16, 5.63], [3.47, 5.62], [2.67, 5.56], [1.61, 6.32] and [2.43, 5.54]. None of them is distinguishable from 4.4, so on log scales the measured tail is consistent with a straight line.
+
+\section{Unsmoothed diffusion and the vendor's kernel}
+\label{sec:kernel}
+
+\subsection{Design of the test}
+
+The test asks whether the kernel alone can turn a pure diffusion membrane ($\kappa=0$) into the measured tail. Synthetic implied volatilities follow $\sigma(z,t)=(\sigma_0+\ell(t))\,s(z)+p(z,t)+\epsilon$, with a fixed smile shape $s(z)=1-0.30z+0.08z^2$ and $\sigma_0=0.16$. The membrane $p$ lives on the study window with 40 modes and is scaled so that its daily change has a standard deviation of 0.25 volatility points. The level $\ell$ is a slow OU process with daily kick 0.0075, and $\epsilon$ is independent quote noise with standard deviation $q$. Quotes are generated for calls and puts at expiries of 16, 23, 30, 37 and 44 days and at $z$ from $-4$ to 3 in steps of 0.05. The vendor's kernel turns them into 30 day pillars at the IvyDB deltas, the pillar strike is recovered from its smoothed volatility, and the result goes through exactly the same panel construction as the real data, restricted to the same seven bins. With the kernel switched off, each pillar takes the nearest quote instead.
+
+The grid is $D\in\{0.003,0.01,0.03,0.1,0.3,1,3\}$ in $z^2$ per day and $q\in\{0,\,0.2,\,0.5\}$ volatility points, with three seeds of 2500 days per cell. The level kick was chosen before the run so that mode 1 carries about 94\% at one reference cell, so the agreement in mode 1 is tuned by construction. No tail quantity was examined before the run.
+
+\subsection{Results}
+
+\begin{table}[t]
+\centering
+\caption{Tail exponent $p$ of synthetic pure diffusion through the study panel, mean over three seeds (seed standard deviation at most 0.1). The measured value is 4.44 with interval [4.18, 4.67].}
+\label{tab:grid}
+\begin{tabular}{lcccccc}
+\toprule
+& \multicolumn{3}{c}{Kernel off} & \multicolumn{3}{c}{Kernel on} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+$D$ ($z^2$/day) & $q=0$ & $q=0.2$ & $q=0.5$ & $q=0$ & $q=0.2$ & $q=0.5$ \\
+\midrule
+0.003 & 1.05 & 0.85 & 0.60 & 3.93 & 3.79 & 3.48 \\
+0.01  & 1.08 & 0.91 & 0.62 & 4.12 & 3.98 & 3.65 \\
+0.03  & 1.28 & 0.98 & 0.67 & 4.49 & 4.31 & 3.88 \\
+0.1   & 1.79 & 1.19 & 0.76 & 5.09 & 4.84 & 4.24 \\
+0.3   & 2.22 & 1.37 & 0.83 & 5.63 & 5.29 & 4.53 \\
+1     & 2.55 & 1.48 & 0.88 & 6.01 & 5.58 & 4.70 \\
+3     & 2.63 & 1.49 & 0.89 & 6.09 & 5.63 & 4.73 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:grid} shows the result. Without the kernel the tail exponent saturates at $2.630\pm0.013$ in the fast limit, well below the measured 4.44. Unsmoothed diffusion is therefore ruled out on this instrument. An earlier version of this analysis put the ceiling at 1.87. The ceiling has risen, but the measured tail has risen more, so the gap between them has grown from 0.66 to 1.81. An analytic decomposition, applying one change at a time, starts from 1.86 on the earlier instrument. Sampling a continuous field instead of a truncated one adds 0.17, sampling at the bin centres adds 0.10, dropping the deepest put bin subtracts 0.20, adding the level factor adds 0.46, and the pillar and binning steps of the full simulation add the last 0.23. The level factor is the largest single contribution, although the split depends on the order in which the changes are applied.
+
+With the kernel switched on the exponent rises by between 2.9 and 4.1 in every cell. Four cells land inside the measured interval: $4.49\pm0.03$, $4.31\pm0.02$, $4.24\pm0.01$ and $4.53\pm0.02$. Since the runs with and without the kernel differ only in the bandwidths, the entire shift from 2.63 to about 4.4 is attributable to the kernel.
 
 \begin{figure}[t]\centering
-\includegraphics[width=.95\linewidth]{figures/fig2_modes.pdf}
-\caption{(a) Modes 1--2 of the real $\Delta\sigma$ panel: uniform level and
-one-node skew see-saw. (b) Mode 3 in the 8-bin panel and with the edge bin
-removed: the dipole tracks the boundary, identifying it as an edge artifact.}
-\label{fig:modes}
-\end{figure}
-
-\textbf{Slopes.} A log--log power-law fit $\lambda_k\sim k^{-p}$ over all modes gives $p=2.99$ (8 bins) and $3.20$ (edge bin excluded). Restricted to the tail (modes 2--8, fitted against their true wavenumbers), $p_{\mathrm{tail}}=2.53$ and $2.64$ respectively. The full-spectrum slope is substantially manufactured by mode~1's dominance; the tail slope is the operator-sensitive statistic. Both exceed the diffusive prediction, but by how much requires the matched-instrument null of the next section, since Eq.~\eqref{eq:increment} distorts any slope measured on daily changes. Fig.~\ref{fig:spectrum} shows the data, the calibrated fit of Sec.~\ref{sec:calibration}, and the falsified diffusive null in one frame.
-
-\begin{figure}[t]\centering
-\includegraphics[width=.62\linewidth]{figures/fig1_spectrum.pdf}
-\caption{Variance shares of daily $\Delta\sigma$: SPX with 95\% block-bootstrap
-CIs, the calibrated composite model, and pure diffusion at its saturating best
-(modes 1--7; its eighth eigenvalue is a structural zero of the 8-point
-sampling). Mode 5 sits above the fit, the shelf residual of
-Sec.~\ref{sec:calibration}.}
+\includegraphics[width=.72\linewidth]{figures/fig1_spectrum.pdf}
+\caption{Shares of tail variance (modes 2 to 7) on log scales. Red: the SPX 30 day panel with 95\% bootstrap intervals. Blue: kernel smoothed pure diffusion in the four cells whose exponent lies inside the measured interval. Dashed: unsmoothed diffusion at its ceiling. The smoothed spectra match the measured exponent but bend downward, while the measured tail stays close to a straight line.}
 \label{fig:spectrum}
 \end{figure}
 
-\section{Operator adjudication}
-\label{sec:adjudication}
+The shape is a different matter (Fig.~\ref{fig:spectrum}). In the four matching cells, mode 2 holds between 0.45 and 0.57 of the tail variance against a measured 0.837 [0.798, 0.865], and none of the six tail shares lies inside its measured interval in any cell. The local slopes rise steeply, from between 0.6 and 1.6 at the first step to between 12.2 and 12.7 at the last, and only the middle one or two of the five fall inside the measured intervals. The same rising pattern appears in every one of the 21 cells with the kernel switched on. It is what Gaussian smoothing does to a spectrum: it suppresses the high modes progressively harder. The measured spectrum does not show it. The level factor is not responsible for the mismatch, because these comparisons use the tail alone.
+
+The vendor's kernel can therefore produce the steepness of the measured tail but not the shape of that steepness. On this evidence the steep tail cannot be credited to a bending term in the dynamics, and it cannot be dismissed as smoothing either.
+
+\section{The call and put seam}
+\label{sec:seam}
+
+The step in mode 2 sits exactly where the panel switches from the put surface to the call surface. If the two surfaces carry independent errors, their difference at the money should move from day to day. I measure that difference directly, $\delta_t=\sigma^{\mathrm{call}}_{50}(t)-\sigma^{\mathrm{put}}_{50}(t)$ at 30 days, and regress the daily returns of each factor on $\Delta\delta_t$. For a single consistent surface the two 50 delta volatilities refer to the same strike and $\delta_t$ would not move.
 
 \begin{table}[t]
 \centering
-\caption{Matched-instrument sweep: fitted slopes of synthetic spectra through the identical pipeline (8 bins on $[-1.15,1.10]$, 2{,}500 days, 5 seeds per cell, mean $\pm$ s.d.). Top: pure diffusion. Bottom: fixed $D=0.2$, increasing bending rigidity $\kappa$.}
-\label{tab:sweep}
-\begin{tabular}{cccccc}
+\caption{Share of each factor's daily return variance explained by the daily change in the call minus put volatility at the money ($R^2$), with 95\% block bootstrap intervals.}
+\label{tab:seam}
+\begin{tabular}{ccc}
 \toprule
-$D$ & $\kappa$ & $p_{\mathrm{full}}$ & $p_{\mathrm{tail}}$ & $k^\ast$ \\
+Mode & $R^2$ & 95\% interval \\
 \midrule
-0.01 & 0 & $0.36\pm0.02$ & $0.42\pm0.03$ & $\infty$ \\
-0.05 & 0 & $0.26\pm0.01$ & $0.34\pm0.02$ & $\infty$ \\
-0.2  & 0 & $0.89\pm0.02$ & $1.12\pm0.04$ & $\infty$ \\
-1    & 0 & $1.55\pm0.02$ & $1.73\pm0.04$ & $\infty$ \\
-5    & 0 & $1.78\pm0.03$ & $1.87\pm0.04$ & $\infty$ \\
-\midrule
-0.2 & 0.01 & $1.54\pm0.02$ & $2.09\pm0.04$ & 4.47 \\
-0.2 & 0.03 & $2.04\pm0.02$ & $2.74\pm0.04$ & 2.58 \\
-0.2 & 0.1  & $2.64\pm0.02$ & $3.39\pm0.04$ & 1.41 \\
-0.2 & 0.2  & $2.97\pm0.02$ & $3.69\pm0.04$ & 1.00 \\
-0.2 & 0.3  & $3.15\pm0.02$ & $3.83\pm0.04$ & 0.82 \\
-0.2 & 0.5  & $3.36\pm0.02$ & $4.00\pm0.03$ & 0.63 \\
-0.2 & 1    & $3.62\pm0.02$ & $4.19\pm0.03$ & 0.45 \\
+1 & 0.026 & [0.009, 0.047] \\
+2 & 0.572 & [0.427, 0.678] \\
+3 & 0.204 & [0.051, 0.441] \\
+4 & 0.039 & [0.011, 0.088] \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:sweep} answers the confound directly: what slope \emph{would} each candidate operator produce through this exact instrument?
+The rule fixed in advance reads mode 2 as not substantially tied to the seam if the upper end of its interval is below 0.5, as substantially tied if the lower end is above 0.5, and as ambiguous otherwise. Table~\ref{tab:seam} gives $R^2=0.572$ with interval 0.427 to 0.678, so the formal reading is ambiguous. Even the lower end of that interval means that more than two fifths of the second factor's daily variance moves with a quantity that should not move at all for a single surface. Mode 3 is affected to a lesser degree, and modes 1 and 4 hardly at all. The second factor of this panel, conventionally read as skew, is therefore partly a property of how the vendor assembles the surface.
 
-\textbf{Diffusion is falsified twice.} Over the full $D$ sweep, the pure-diffusion slope saturates at $p_{\mathrm{full}}\le1.78$ and $p_{\mathrm{tail}}\le1.87$: the increment-law flattening can only pull slopes \emph{below} the level-law value of 2, never above. The real values ($2.99$--$3.20$; tail $2.53$--$2.64$) are unreachable, a gap of tens of standard errors, whether or not the suspect level mode is included.
-
-\textbf{A single homogeneous $k^4$ operator is slope-sufficient but profile-falsified.} Bending rigidity does steepen spectra through the observable band, and $\kappa\approx0.2$--$0.3$ matches the real full-spectrum slope. But the match is an artifact of slope's shape-blindness: every homogeneous-operator spectrum in the sweep is \emph{concave} on log--log axes ($p_{\mathrm{tail}}>p_{\mathrm{full}}$), while the real spectrum is \emph{convex} ($p_{\mathrm{tail}}<p_{\mathrm{full}}$): a giant head over a gentle tail. At matched slope, the single-operator model mispredicts the mode-2 share sixfold (0.28 vs 0.049). Convexity of the real spectrum forces a two-component structure.
-
-\textbf{The composite reproduces the eight-point profile.} With the level factor tuned to mode~1's share ($0.9157$ at daily kick s.d.\ $3.35$, hand stage) and the tail matched by $\kappa\approx0.02$ at $D=0.2$, the model tracks the real spectrum mode by mode, including two unforced agreements: the smallest eigenvalue, structurally zero for an 8-mode field on 8 points (rank deficiency), filled to $0.0013$ vs real $0.0014$ by the level factor as ninth variance source, and near-matching mid-tail shares. Residuals against synthetic seed noise alone appeared enormous (mode 3: $+31\sigma$) but shrink to honest size under the real spectrum's block-bootstrap errors (mode 3: $+1.9\sigma$, not significant), a caution recorded in the decision log: \emph{seed spread is not measurement error}.
-
-\section{Calibration}
-\label{sec:calibration}
-
-Parameters are fitted by weighted least squares of the analytic forward model, Eq.~\eqref{eq:forward}, against the real shares: $\chi^2=\sum_{k=1}^{7}\big[(\hat\lambda_k-\lambda_k)/\sigma_k\big]^2$ with block-bootstrap $\sigma_k$; mode 8 is excluded as sum-determined (7 points, 3 parameters, $\mathrm{dof}=4$). Optimisation is Nelder--Mead in $(\log D,\log\kappa,\log m)$, positivity by construction, scale-symmetric uncertainty. Confidence intervals come from refitting each of the $1{,}000$ bootstrap spectra.
+\section{Relaxation over a few days}
+\label{sec:relax}
 
 \begin{table}[t]
 \centering
-\caption{Calibrated composite model (bootstrap medians; 95\% CIs from bootstrap refits).}
-\label{tab:fit}
-\begin{tabular}{lcc}
+\caption{Autocorrelation of daily factor returns at lag 1 and the sum $S$ of the autocorrelations at lags 2 to 5, with 95\% block bootstrap intervals.}
+\label{tab:acf}
+\begin{tabular}{ccccc}
 \toprule
-Quantity & Estimate & 95\% CI \\
+Mode & Lag 1 & 95\% interval & $S$ (lags 2 to 5) & 95\% interval \\
 \midrule
-$D$ (tension/diffusion) & 0.69 & [0.29, 1.25] \\
-$\kappa$ (bending rigidity) & 0.011 & [0.006, 0.020] \\
-level daily kick $\sqrt m$ & 2.64 & [2.25, 3.35] \\
-crossover $k^\ast=\sqrt{D/\kappa}$ & 7.9 & [5.1, 11.2] \\
-$\chi^2/\mathrm{dof}$ & 3.6 & --- \\
+1 & $-0.098$ & [$-0.153$, $-0.041$] & $-0.052$ & [$-0.156$, 0.055] \\
+2 & $-0.295$ & [$-0.365$, $-0.192$] & $-0.170$ & [$-0.309$, $-0.007$] \\
+3 & $-0.279$ & [$-0.379$, $-0.155$] & $-0.069$ & [$-0.135$, 0.014] \\
+4 & $-0.269$ & [$-0.338$, $-0.192$] & $-0.105$ & [$-0.165$, $-0.007$] \\
+5 & $-0.287$ & [$-0.386$, $-0.187$] & $-0.119$ & [$-0.197$, $-0.016$] \\
+6 & $-0.385$ & [$-0.422$, $-0.312$] & $-0.067$ & [$-0.128$, 0.004] \\
+7 & $-0.336$ & [$-0.404$, $-0.241$] & $-0.115$ & [$-0.211$, $-0.012$] \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:fit} gives the result. Three readings:
+This test is a measurement and does not use any fitted rates. By Eq.~\eqref{eq:acf}, a negative lag one autocorrelation on its own cannot separate relaxation from measurement noise, so the criterion fixed in advance also requires longer lags. It is met if the lag one interval lies below zero for modes 2 and 3 and the interval for $S$ lies below zero for at least one of them. On simulated panels from the harness of Sec.~\ref{sec:kernel}, a membrane relaxing much faster than one day gives lag one values near $-0.5$ with $S$ near zero and fails the criterion, while $\gamma_1\approx0.2$ per day gives lag one near $-0.25$ with $S$ near $-0.13$ and passes.
 
-\textbf{The hand-fit anchor was wrong, and the fit says so.} The exploratory stage had fixed $D=0.2$ by inheritance from the sweep and tuned only $\kappa$; freeing all three parameters improves $\chi^2$ by $17.1$ (decisive for 3 parameters), trading $3.5\times$ more diffusion against half the bending. $\log D$ and $\log\kappa$ are only weakly correlated across bootstrap refits ($\rho=+0.32$): the data identify the parameters separately; the intervals are honestly wide rather than degenerate.
-
-\textbf{The crossover sits at the top of the observable band.} $k^\ast=7.9\,[5.1,11.2]$: the observable modes are diffusion-dominated, with bending switching on in the last resolvable mode or two. Whether bending fully develops beyond $k\approx8$ is outside this instrument's field of view, the resolution ceiling of Sec.~\ref{sec:data} becoming a physics limit.
-
-\textbf{One residual survives.} With bootstrap-weighted errors, the fitted model matches all shares except mode~5: real $0.0064$, model $0.0044$, $z=-3.0$. The real spectrum has a near-degenerate ``shelf'' at modes 4--5 ($0.0067$, $0.0064$) that no smooth level-plus-operator composite reproduces; it is the leading unexplained feature. ($\chi^2/\mathrm{dof}=3.6$ quantifies the same statement globally. The unfitted mode-8 share sits at $z=+2.3$, a consistency indicator only.)
-
-\section{Out-of-sample risk test}
-\label{sec:oos}
-
-The practical claim of a factor model is predictive: portfolio variance $w^\top\hat\Sigma\,w$ estimated before the fact. We split chronologically, train 2015-01-05 to 2022-01-05 ($1{,}748$ changes, COVID-2020 included), test 2022-01-06 to 2024-12-31 ($750$ changes, an unseen bear-market regime), and compare three covariance models built from training data only: (i) an empirical PCA factor model (leading factors plus diagonal residual top-up, preserving per-bin variances); (ii) the field theory: model correlations from the calibrated Eq.~\eqref{eq:forward}, rescaled by training per-bin standard deviations; (iii) a diagonal (independent-bins) baseline. All three share the training standard deviations, so the contest isolates \emph{correlation structure}, precisely what the theory claims to know from three parameters. Test portfolios are transparent vega-sketch weight vectors on the 8 bins: equal-weight (level), ATM straddle, risk reversal (long put wing/short call wing), and butterfly (wings minus body). The reported statistic is realised test variance over predicted variance (unity is perfect).
-
-\begin{table}[t]
-\centering
-\caption{Out-of-sample variance ratios (realised/predicted; 1 = perfect). Realised variances in units of $10^{-4}$.}
-\label{tab:oos}
-\begin{tabular}{lccccc}
-\toprule
-Portfolio & Realised & Emp.\ 1f & Emp.\ 3f & Emp.\ 5f & Field theory \hspace{2pt}/\hspace{2pt} Diagonal \\
-\midrule
-Straddle       & 0.62 & 0.459 & 0.462 & 0.463 & 0.461 \;/\; 0.905 \\
-Risk reversal  & 0.12 & 0.794 & 0.649 & 0.649 & 0.642 \;/\; 0.176 \\
-Butterfly      & 0.10 & 0.906 & 1.101 & 1.162 & 0.495 \;/\; 0.072 \\
-Equal weight   & 0.53 & 0.435 & 0.438 & 0.439 & 0.441 \;/\; 3.149 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Table~\ref{tab:oos} contains four findings:
-
-\textbf{A common scale factor, explained.} All structured models run at ratios $0.44$--$0.65$: they over-predict, because the training window contains the most violent volatility-of-volatility episode of the decade (March 2020) while the test regime is calmer. The mis-scaling is shared by construction (common training variances) and is a statement about non-stationarity of overall scale, not about correlation structure; dynamic variance rescaling is standard practice and listed as future work.
-
-\textbf{Correlation structure is the whole game.} The diagonal baseline fails in \emph{both directions at once}: it under-predicts level risk $3.1\times$ (summing portfolios collect the correlation mass it discards) and over-predicts spread risk $6$--$14\times$ (long--short portfolios cancel correlations it never removes).
-
-\textbf{Three parameters match thirty-six numbers.} On level, straddle, and risk-reversal exposures the field theory agrees with the empirical three-factor model to within $1\%$ (e.g.\ $0.461$ vs $0.462$), robustly across empirical factor counts (3 vs 5 identical to three decimals; the 1-factor model fails the risk reversal, confirming mode 2 carries real skew risk). Through a regime change, the calibrated physics reproduces the empirical covariance's out-of-sample predictions on every portfolio that does not isolate the known residual.
-
-\textbf{The butterfly finds the shelf, independently.} The butterfly's weights annihilate modes 1 (sum zero) and 2 (symmetry), loading precisely modes 3--5; exactly where calibration located its only significant residual. There the field theory over-predicts $2.2\times$ ($0.495$ vs empirical $1.101$). Two measurements of entirely different type: a spectral fit and an out-of-sample money-terms risk ratio, point at the same defect, establishing the mode-4--5 shelf as a property of the surface rather than of any fitting procedure. Fig.~\ref{fig:oos} summarises the test.
-
-\begin{figure}[t]\centering
-\includegraphics[width=.66\linewidth]{figures/fig3_oos.pdf}
-\caption{Out-of-sample variance ratios (log scale; dashed line = perfect).
-Field theory and the empirical 3-factor model agree to $\le1\%$ everywhere
-except the butterfly, which isolates the mode-4--5 residual.}
-\label{fig:oos}
-\end{figure}
+Table~\ref{tab:acf} shows that all tail modes have lag one autocorrelations between $-0.27$ and $-0.39$, and that $S$ is significantly negative for modes 2, 4, 5 and 7. The criterion is met, so there is structure on a scale of days that noise alone does not produce. Its source is open. Mode 2 is substantially tied to the seam (Sec.~\ref{sec:seam}), and vendor errors that decay over a few days would leave exactly this signature. Pillars drifting between bins as the smile moves could do the same in the higher modes. Relaxation faster than about one day is invisible at daily sampling whatever its source, so this test cannot rule out a fast operator.
 
 \section{Discussion}
 \label{sec:discussion}
 
-\textbf{What holds.} Within its observable band, the SPX smile's daily dynamics are quantitatively consistent with a two-component structure: an external volatility-level factor (91.5\% of change variance, uniform in $z$, plausibly containing the gamma--theta carry and market-wide repricing) riding on a stiff membrane whose relaxation spectrum $\gamma_k=Dk^2+\kappa k^4$ has its diffusion-to-bending crossover at the edge of resolution. The structure is not merely descriptive: three calibrated parameters predict out-of-sample portfolio risk as well as a full empirical factor model wherever the model's one known residual is not isolated.
+\paragraph{What the data show.} The 30 day SPX smile, as published by the vendor, moves mostly as a whole, with a second factor that changes sign at the money and a tail that falls as $k^{-4.4}$. Diffusion observed without smoothing cannot produce that tail. Diffusion passed through the vendor's kernel reproduces its steepness but not its shape. The second factor is partly tied to the seam between the call and put surfaces, and several factors relax over a few days for reasons that are not yet clear.
 
-\textbf{What breaks, and where.} Pure diffusion is excluded outright. The homogeneous single-operator picture is excluded by spectral convexity. The composite's failure is localised to a mode-4--5 shelf, measured twice (spectral $z=-3.0$; butterfly $2.2\times$). Candidate mechanisms: a pinned or resonant structure in the put wing, fat-tailed shocks, slow parameter drift; are deliberately left for future work rather than fitted post hoc.
+\paragraph{What the instrument cannot decide.} Before tests 47 and 48 were run, I fixed a rule for what would follow. A forward model that includes the kernel, fitted to the measured spectrum, would be built only if mode 2 proved not to be substantially tied to the seam and the relaxation criterion was met. The seam result was ambiguous, so the rule was not satisfied and that model was not built. The question of which operator, if any, governs the smile therefore remains open. It has not been answered in either direction.
 
-\textbf{Limitations.} (i) Resolution: 8 bins on $z\in[-1.15,1.10]$; deep wings and $k>8$ are invisible; claims are conditional on the band. (ii) Sufficiency, not uniqueness: other mechanisms could reproduce a finite-resolution spectrum; the claim is that the composite is the minimal sufficient extension tested. (iii) The measurement variable is $\Delta\sigma$, not delta-hedged P\&L; the difference is approximately rank-one and confined to mode~1's interpretation. (iv) Overall variance scale is non-stationary (COVID-in-train); the OOS test controls for it by design but a deployable risk model would rescale dynamically. (v) Maturity structure: this is a fixed-maturity (30-day) slice; the $\tau$-dimension and full 2D membrane are deferred. (vi) Rolling-window stability of the modes (in-sample stability is necessary but not sufficient) is the principal deferred robustness check.
+\paragraph{The measurement that would decide it.} Rebuilding the 30 day slice from raw option quotes (OptionMetrics \texttt{opprcd}), as one surface consistent with parity between calls and puts, removes both the kernel and the seam. A spectrum measured that way could be compared with Eq.~\eqref{eq:forward} directly. The same data would also reach deeper into the wings than the delta grid allows and give access to higher modes.
 
-\textbf{Methodological stance.} Every stage was validated against known ground truth before use (pipeline on synthetic data; forward model against simulation; error bars by block bootstrap respecting volatility clustering); predictions were stated before runs and graded after, including the supervisor-side failures (a predicted curvature mode~3, killed by an edge-tracking diagnostic; a predicted strong $D$--$\kappa$ degeneracy, not observed); and all measurement choices are recorded in a numbered decision log (Appendix~\ref{app:dlog}). Where the data contradicted expectation: the increment-law correction, the seven-bin panel artifact, the mode-3 boundary dipole, the hand-fit's rejection, the contradiction is reported as part of the result.
+\paragraph{Limitations.} The synthetic harness has no structure across maturities, so the maturity part of the kernel acts on a field that is the same at every expiry; it does not model the vega cutoff; and its quote noise is independent across options. The analysis uses one maturity and one index. Changes in implied volatility at fixed $z$ include the gamma and theta carry, which mainly affects mode 1. The tail statistics rest on six modes, and the smallest shares are of order $10^{-4}$.
+
+\section*{Acknowledgements}
+
+This project was inspired by a conference talk by P.~Ioselevich on factor models for option risk. The analysis here is independent and differs substantially from that work.
+
+\section*{Use of AI tools}
+
+I used AI assistants (mainly Claude, through chat and Claude Code) throughout this project. They wrote a large share of the code from my specifications and helped me learn the methods involved. I also used an AI model as a critical reviewer of the earlier draft; that review found the errors listed in Appendix~\ref{app:corrections}. The research question, the choice of data, the decisions about what to test and what to claim, and the interpretation are mine, and every number in this paper comes from scripts I ran myself.
 
 \appendix
 
-\section{Decision log (abridged)}
-\label{app:dlog}
-\begin{description}
-\item[D1] Strike from vendor \texttt{impl\_strike} (self-consistency; fewest assumptions).
-\item[D2] OTM-only put/call stitching, $|\Delta|\le0.5$.
-\item[D3] Calendar$\to$business days ($\times252/365$); omission shrinks $z$ by $\sim$17\%.
-\item[D4] ATM-normalised $z$; usable window $[-1.15,1.10]$, 8 bins; 13.3\% of rows outside; hard error if $\sigma_{\mathrm{ATM}}$ absent.
-\item[D5] Panel variable: daily $\Delta\sigma$ (stationarity; harness-matched; no hedging-frequency assumption); rank-one gamma--theta caveat on mode 1.
-\item[D6] Phase-3 results: level and skew modes robust; mode 3 an edge artifact (node count unstable $2\to4$ under bin removal); slopes $p=2.99/3.20$, $p_{\mathrm{tail}}=2.53/2.64$.
-\item[D7] Adjudication: diffusion falsified ($p_{\mathrm{tail}}\le1.87$); single $k^4$ operator profile-falsified (convexity); composite sufficient; aliasing control $n_{\mathrm{modes}}=n_z$; underflow guard re-derived.
-\item[D8] Calibration: $D=0.69\,[0.29,1.25]$, $\kappa=0.011\,[0.006,0.020]$, $\sqrt m=2.64\,[2.25,3.35]$, $k^\ast=7.9\,[5.1,11.2]$; $\chi^2/\mathrm{dof}=3.6$; hand-fit rejected ($\Delta\chi^2=17.1$); sole residual mode-5 shelf ($z=-3.0$).
-\item[D9] OOS test: field theory within 1\% of empirical 3-factor on level/straddle/risk-reversal; diagonal fails two-sided; butterfly over-predicted $2.2\times$, independently localising the D8 residual.
-\end{description}
+\section{Prediction ledger}
+\label{app:ledger}
+
+Each test states its decision rule in the docstring of its script, written before the test was run. The entries below record the rules and their outcomes, in the order they happened.
+
+\paragraph{Test 49, validity check.} The rule required that unsmoothed diffusion give a tail exponent of at most 2.5, so that the harness could not produce the measured tail without the kernel. The threshold was derived from the diffusion ceiling of the earlier instrument (1.87), which no longer applied after the corrections in Appendix~\ref{app:corrections}. The check failed: the ceiling on the corrected instrument is $2.630\pm0.013$. After these results existed, the check was amended to test its stated purpose directly: the largest exponent without the kernel, plus two seed standard deviations, must lie below the lower end of the measured interval. The amended check passes ($2.656<4.182$). The conclusions in Sec.~\ref{sec:kernel} rest on the results with the kernel switched on, not on this check.
+
+\paragraph{Test 49, verdict.} Smoothing is sufficient for the tail exponent: four cells with the kernel on lie inside the measured interval. It fails on the shape, inside the tail: mode 2 holds 0.45 to 0.57 of the tail variance against a measured 0.837, and the local slopes rise from about 1 to about 12.5 against a measured profile that stays near 4.4. The level kick was fixed before the run by trying three values at one reference cell and looking only at the mode 1 share, so the agreement in mode 1 is tuned. The operator question stays open.
+
+\paragraph{Test 47.} $R^2=0.572$ [0.427, 0.678] for mode 2. Ambiguous under the rule, since the interval contains 0.5.
+
+\paragraph{Test 48.} Criterion met: lag one negative for all tail modes, $S$ negative for modes 2, 4, 5 and 7. The test detects relaxation on scales of a day or longer only, so failure would have closed the question of dynamics at daily sampling without deciding anything about the static structure. The source of the relaxation is not identified.
+
+\paragraph{Scope rule.} Fixed before tests 47 and 48 reported: build a forward model that includes the kernel only if test 47 gives an upper interval end below 0.5 and test 48 meets its criterion. Test 47 did not, so the model was not built, although test 48 passed. The fitted membrane model of the earlier draft and the out of sample risk comparison built on it were removed rather than refitted, since the paper no longer makes claims that depend on them.
+
+\paragraph{Measurement model.} The vendor's kernel is treated as part of the measurement, not as a limitation. Any claim about an operator, in this work or in an extension to finer data, needs a forward model that includes it.
+
+\section{Corrections to the earlier draft}
+\label{app:corrections}
+
+An earlier draft reported a fitted membrane with tension and bending, a feature in modes 4 and 5 that the fit could not reproduce, and an out of sample risk comparison. A review of that draft found the following problems, all corrected here.
+
+\begin{enumerate}
+\item The analysis scripts averaged implied volatility within each $z$ bin across all eleven vendor maturities instead of using the 30 day slice. The maturity filter was present in the script that built the reference panel and missing from the others. Every result of the earlier draft came from the averaged panel, including the feature in modes 4 and 5, which does not appear in the 30 day slice. The panel is now built in a single function that checks that it contains one maturity.
+\item The earlier draft attributed a dropped bin to a problem with data types. The real cause was the missing filter: the 30 day slice genuinely lacks the deepest put bin on 10.9\% of days.
+\item The decay rates used integer mode numbers instead of wavenumbers, so $D$ and $\kappa$ were not in units of $z$. The model was evaluated at evenly spaced points instead of at the bin centres, and it truncated the field to as many modes as sample points, which made one mode an artifact of the truncation.
+\item The out of sample comparison used model parameters fitted on the full sample, test period included, although the draft described all models as built from training data only.
+\item The draft stated that a butterfly portfolio loads on modes 3 to 5. Its symmetric weights give it almost no exposure to mode 4, and under the fitted model almost all of its variance sat in mode 3.
+\item The composite fit had $\chi^2=14.4$ on 4 degrees of freedom ($p\approx0.006$) on the averaged panel, which the draft described as a model that works. That fit is recorded here as history only and is not a property of the 30 day panel.
+\end{enumerate}
 
 \section{Reproducibility}
-All results derive from a public repository (\texttt{github.com/MichaelAafton/diffusion-modes-vol-surface}): a one-time WRDS pull script (raw data git-ignored under licence), the validated simulator and analytic forward model in \texttt{src/}, analysis scripts in \texttt{scripts/}, and a pytest suite that freezes the harness-recovery test, the increment-spectrum theory, and loader dtype guarantees. Randomness is seeded throughout; bootstrap and sweep settings are recorded in the scripts.
+
+The code is at the repository above. A script downloads the data once from WRDS; the data are licensed and not included. Every number in this paper is printed by one of the following scripts: \texttt{build\_panel.py} (panel, spectrum, loadings), \texttt{bootstrap\_real\_spectrum.py} (all intervals in Sec.~\ref{sec:spectrum}), \texttt{test49\_vendor\_kernel.py} (Table~\ref{tab:grid}), \texttt{test49\_followups.py} (the ceiling decomposition and the shape comparison), \texttt{test47\_48.py} (Tables~\ref{tab:seam} and \ref{tab:acf}, and in its validation mode the criterion check on simulated panels) and \texttt{make\_figures.py} (Fig.~\ref{fig:spectrum}). Randomness is seeded throughout.
 
 \begin{thebibliography}{9}
-\bibitem{bouchaud} Bouchaud, J.-P.\ and Potters, M.\ (2003) \emph{Theory of financial risk and derivative pricing}. 2nd edn. Cambridge: Cambridge University Press.
-\bibitem{cont} Cont, R.\ and da Fonseca, J.\ (2002) `Dynamics of implied volatility surfaces', \emph{Quantitative Finance}, 2(1), pp.~45--60.
-\bibitem{gatheral} Gatheral, J.\ (2006) \emph{The volatility surface: a practitioner's guide}. Hoboken, NJ: John Wiley \& Sons.
-\bibitem{lecoz} Le~Coz, V.\ and Bouchaud, J.-P.\ (2024) `Revisiting elastic string models of forward interest rates', \emph{Quantitative Finance}, 24, pp.~1561--1578.
+\bibitem{cont} Cont, R.\ and da Fonseca, J.\ (2002). Dynamics of implied volatility surfaces. \emph{Quantitative Finance} 2(1).
+\bibitem{lecoz} Le~Coz, V.\ and Bouchaud, J.P.\ (2024). Revisiting elastic string models of forward interest rates. \emph{Quantitative Finance} 24.
+\bibitem{ivydb} OptionMetrics. \emph{IvyDB US Reference Manual}, version 7.0.
 \end{thebibliography}
 
 \end{document}
