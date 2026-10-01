@@ -5,6 +5,9 @@
    instrument change at a time (one ordering; contributions are order-dependent).
 2. Shape: does kernel-smoothed pure diffusion reproduce the spectrum's shape
    (mode-share profile, log-log curvature), or only its tail slope?
+3. Tail-internal comparison: modes 2-7 only (shares renormalised within the tail,
+   and local slopes, which are ratios of adjacent tail modes), against block-bootstrap
+   95% intervals of the same quantities on the real data. Independent of mode 1.
 
 Run:  python -m scripts.test49_followups
 """
@@ -87,26 +90,57 @@ def shape():
     if real is not None:
         print(f"   real                 shares {real}  local slopes {np.round(local_slopes(real), 2)}")
     print("   (a) cells whose mean p_tail lies in the real interval, 3 seeds:")
+    cells = {}
     for q, D in [(0.0, 0.03), (0.002, 0.03), (0.005, 0.1), (0.005, 0.3)]:
         S = []
         for seed in t49.SEEDS:
             p, lvl = t49.simulate_truth(D, seed)
             S.append(t49.instrument(t49.vendor_pillars(p, lvl, q, t49.H_VENDOR, seed))[0])
         m = np.mean(S, axis=0)
+        cells[(q, D)] = m
         line = f"   q={q:<5} D={D:<5} shares {m}  local slopes {np.round(local_slopes(m), 2)}"
         if ci is not None:
             line += f"  in real CI {((m >= ci[0]) & (m <= ci[1])).astype(int)}"
         print(line, flush=True)
     print("   (b) whole kernel-ON grid, seed 0: first -> last local slope")
     for q in t49.Q_GRID:
-        cells = []
+        cells_b = []
         for D in t49.D_GRID:
             p, lvl = t49.simulate_truth(D, 0)
             ls = local_slopes(t49.instrument(t49.vendor_pillars(p, lvl, q, t49.H_VENDOR, 0))[0])
-            cells.append(f"D={D}: {ls[0]:.1f}->{ls[-1]:.1f}")
-        print(f"   q={q}: " + " | ".join(cells), flush=True)
+            cells_b.append(f"D={D}: {ls[0]:.1f}->{ls[-1]:.1f}")
+        print(f"   q={q}: " + " | ".join(cells_b), flush=True)
+    return cells
+
+
+def tail_internal(cells):
+    np.set_printoptions(precision=3, suppress=True)
+    tail = lambda s: np.asarray(s)[1:] / np.asarray(s)[1:].sum()
+    print("\n3. Tail-internal comparison (modes 2-7 only; mode 1 plays no role)")
+    real, _ = real_reference()
+    root = Path(__file__).resolve().parent.parent / "data" / "processed"
+    boot_path = root / "real_spectrum_boot.npy"
+    if real is not None and boot_path.exists():
+        boot = np.load(boot_path)
+        bt = np.array([tail(b) for b in boot])
+        bl = np.array([local_slopes(b) for b in boot])
+        t_ci = np.percentile(bt, [2.5, 97.5], axis=0)
+        l_ci = np.percentile(bl, [2.5, 97.5], axis=0)
+        print(f"   real  tail shares {tail(real)}")
+        print(f"         95% lo      {t_ci[0]}\n         95% hi      {t_ci[1]}")
+        print(f"   real  local slopes {np.round(local_slopes(real), 2)}")
+        print(f"         95% lo       {np.round(l_ci[0], 2)}\n         95% hi       {np.round(l_ci[1], 2)}")
+    else:
+        t_ci = l_ci = None
+    for (q, D), m in cells.items():
+        ts, ls = tail(m), local_slopes(m)
+        line = f"   q={q:<5} D={D:<5} tail shares {ts}  local slopes {np.round(ls, 2)}"
+        if t_ci is not None:
+            line += (f"  in CI: shares {((ts >= t_ci[0]) & (ts <= t_ci[1])).astype(int)}"
+                     f" slopes {((ls >= l_ci[0]) & (ls <= l_ci[1])).astype(int)}")
+        print(line)
 
 
 if __name__ == "__main__":
     decomposition()
-    shape()
+    tail_internal(shape())
