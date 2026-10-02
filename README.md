@@ -23,7 +23,9 @@ All intervals are 95% moving block bootstrap intervals (blocks of 25 days, 1000 
 
 ## How the tests were run
 
-The main tests (`scripts/test49_vendor_kernel.py` and `scripts/test47_48.py`) state their decision rules in the module docstring, and those rules were written down before the tests were run. The rule that decided which direction the paper would take was also fixed before the results of tests 47 and 48 were known. One rule had to change after its results existed: the validity check in test 49 was derived from an older version of the instrument and failed for that reason. The report gives the original rule, why it no longer applied, and the amended rule, in that order. The conclusions do not depend on the amended check.
+There are three tests: the kernel test (`scripts/test49_vendor_kernel.py`), and the seam and relaxation tests (`scripts/test47_48.py`). The numbers in the file names are the numbers of the items in the review of the earlier version that proposed them. Each script states its decision rules in its docstring, and the rules were written down before the tests were run. For the seam and relaxation tests the commit history confirms this, and the rule that decided which direction the paper would take was also committed before their results were known. The kernel test's rules were committed together with later follow up analyses, so for that test the history cannot confirm the order.
+
+One rule had to change after its results existed: the validity check in the kernel test was derived from an older version of the instrument and failed for that reason. The script still prints the original verdict and then the amended check, labelled as such. The report gives the original rule, why it no longer applied, and the amended rule, in that order. The conclusions do not depend on the amended check.
 
 ## Corrections to the first version
 
@@ -43,7 +45,7 @@ The data is licensed and is not included. Running `scripts/pull_wrds.py` needs a
 * **Moneyness.** Each pillar is placed at z = log(K/S) / (σ_ATM √T), where σ_ATM is the average of the 50 delta call and put volatilities on that day and T is the maturity in years. The strike is the vendor's own `impl_strike`.
 * **Panel.** Only the 30 calendar day pillars are used, and only out of the money ones (|delta| ≤ 0.50), so puts cover z < 0 and calls cover z > 0. Pillars are averaged within 8 equal bins on z in [−1.15, 1.10]. Bins filled on fewer than 95% of days are dropped (the deepest put bin, filled on 89.1% of days), and then days with any gap are dropped. The result is 2498 days by 7 bins.
 * **PCA.** Eigendecomposition of the correlation matrix of daily changes in implied volatility.
-* **Vendor kernel.** Per the IvyDB reference manual, each pillar is a vega weighted average of option volatilities with a Gaussian weight in log maturity and call equivalent delta (bandwidths h₁ = 0.05 and h₂ = 0.005). A third bandwidth h₃ = 0.001 on the call/put indicator means calls and puts are smoothed independently. `scripts/test49_vendor_kernel.py` reproduces this kernel on simulated quotes.
+* **Vendor kernel.** Per the IvyDB reference manual (also quoted by Avellaneda et al. 2020), each pillar is a vega weighted average of option volatilities with a Gaussian weight in log maturity and call equivalent delta (bandwidths h₁ = 0.05 and h₂ = 0.005). A third bandwidth h₃ = 0.001 on the call/put indicator means calls and puts are smoothed independently. `scripts/test49_vendor_kernel.py` reproduces this kernel on simulated quotes.
 
 ## Reproducing the results
 
@@ -75,7 +77,7 @@ python -m scripts.make_figures              # Figure 1 of the report
 |---|---|
 | Panel size, coverage, dropped bin, bin centres, variance shares, p = 4.44, local slopes, mode loadings | `build_panel` |
 | Intervals on the shares, on p, on the local slopes and on the tail shares | `bootstrap_real_spectrum` |
-| Diffusion ceiling 2.63, smoothed diffusion exponents and their seed spread | `test49_vendor_kernel` |
+| Diffusion ceiling 2.63, smoothed diffusion exponents and their seed spread, both validity checks | `test49_vendor_kernel` |
 | Decomposition of the ceiling, shape comparison between real and smoothed spectra | `test49_followups` |
 | Seam R², autocorrelations and the outcome of the decision rule | `test47_48` |
 | Figure 1 | `make_figures` |
@@ -104,8 +106,8 @@ diffusion-modes-vol-surface/
 │   └── visualize_surface.py      optional animation of the smile
 ├── src/
 │   ├── __init__.py
-│   ├── calibration.py            analytic spectrum of the membrane model
 │   ├── data_pipeline.py          loading, moneyness, build_study_panel
+│   ├── forward_model.py          analytic spectrum of the membrane model
 │   ├── pca.py                    correlation PCA, factor returns, tail slope
 │   └── simulate.py               membrane simulator used by the tests
 ├── tests/
@@ -130,6 +132,7 @@ This project was inspired by a conference talk by P. Ioselevich on factor models
 
 ## References
 
+* Avellaneda, M., Healy, B., Papanicolaou, A. and Papanicolaou, G. (2020). PCA for implied volatility surfaces. arXiv:2002.00085.
 * Cont, R. and da Fonseca, J. (2002). Dynamics of implied volatility surfaces. *Quantitative Finance* 2(1), 45 to 60.
 * Le Coz, V. and Bouchaud, J.P. (2024). Revisiting elastic string models of forward interest rates. *Quantitative Finance* 24, 1561 to 1578.
 * OptionMetrics. *IvyDB US Reference Manual*, version 7.0.

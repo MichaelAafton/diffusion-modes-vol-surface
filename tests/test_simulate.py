@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from src.pca import run_pca
-from src.calibration import model_spectrum
+from src.forward_model import model_spectrum
 from src.simulate import (
     SPDEConfig, StochasticHeatEquation, bin_centres, generate_synthetic_dataset,
 )
@@ -105,7 +105,7 @@ class TestGenerateSyntheticDataset:
 
 
 class TestForwardModel:
-    """calibration.model_spectrum against direct simulation on the study instrument."""
+    """forward_model.model_spectrum against direct simulation on the study instrument."""
 
     Z = bin_centres(-1.15, 1.10, 8)[1:]          # the 7 kept bin centres
 
@@ -115,7 +115,7 @@ class TestForwardModel:
         assert np.all(np.diff(s) <= 0)
 
     def test_matches_simulation(self):
-        D, kappa, m = 0.3529, 0.002868, 6.99
+        D, kappa, m = 0.35, 0.003, 7.0
         analytic = model_spectrum(D, kappa, m, self.Z)
         sims = []
         for seed in range(3):

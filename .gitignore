@@ -24,10 +24,8 @@ env/
 # Data (too large for git) — keep the directory structure, ignore the contents
 data/raw/*
 data/processed/*
-data/synthetic/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
-!data/synthetic/.gitkeep
 .pgpass
 
 # OS

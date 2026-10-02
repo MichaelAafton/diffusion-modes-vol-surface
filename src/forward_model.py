@@ -7,7 +7,7 @@ level factor, observed at given sample points. It is used for the analytic
 diffusion-ceiling decomposition in ``scripts/test49_followups.py``.
 
 It does not include the vendor's smoothing kernel, which is part of the
-measurement (see README); it is therefore not a model of the observed surface.
+measurement (report, Sec. 3); it is therefore not a model of the observed surface.
 """
 
 import numpy as np

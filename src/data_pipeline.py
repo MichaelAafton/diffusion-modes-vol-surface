@@ -108,10 +108,10 @@ def load_optionmetrics(
 ) -> pd.DataFrame:
     """Load SPX smoothed vol surfaces (IvyDB vsurfd) into pipeline schema.
 
-    Files are written by ``scripts/pull_wrds.py``. Decisions (see README):
-    vendor impl_strike as the strike (D1); OTM-only stitching via
-    |delta| <= 50 (D2); calendar -> business days via 252/365 (D3);
-    usable z-range [-1.15, 1.10] (D4). Numeric columns are coerced on load.
+    Files are written by ``scripts/pull_wrds.py``. Choices (report, Sec. 3):
+    the vendor's impl_strike is the strike; only out-of-the-money pillars are
+    kept (|delta| <= 50), so puts cover z < 0 and calls z > 0; maturities are
+    calendar days, so T = days / 365. Numeric columns are coerced on load.
     """
     surf = pd.read_parquet(surface_path)
     spot = pd.read_parquet(spot_path)
@@ -213,7 +213,7 @@ def build_study_panel(
 
     Specification (fixed; every real-data script uses this function):
       - maturity: days == 30 (single slice, asserted)
-      - moneyness: z = log(K/S) / (sigma_ATM * sqrt(T))  (D1-D4)
+      - moneyness: z = log(K/S) / (sigma_ATM * sqrt(T)), T = days / 365
       - grid: 8 uniform bins on [-1.15, 1.10]  (ReparamConfig defaults)
       - coverage: bins with < 95% daily fill are dropped, then incomplete days
 

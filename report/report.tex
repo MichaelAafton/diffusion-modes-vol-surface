@@ -7,9 +7,10 @@
 \usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
 \usepackage{caption}
 \captionsetup{font=small,labelfont=bf}
+\hypersetup{pdftitle={Spectral Structure of the 30 Day SPX Implied Volatility Smile in Vendor Smoothed Surfaces},pdfauthor={Alexander Pascal}}
 
 \title{\textbf{Spectral Structure of the 30 Day SPX Implied Volatility Smile\\ in Vendor Smoothed Surfaces}}
-\author{Alexander~Pascal\\ Department of Physics, King's College London\\ \small\url{https://github.com/MichaelAafton/diffusion-modes-vol-surface}}
+\author{Alexander~Pascal\\ \small\url{https://github.com/MichaelAafton/diffusion-modes-vol-surface}}
 \date{October 2026}
 
 \begin{document}
@@ -21,7 +22,7 @@
 
 \section{Introduction}
 
-The implied volatility smile of a liquid index changes every day, and the structure of those changes determines the risk of any portfolio of options. Principal component analysis of daily changes is the standard way to describe that structure. Cont and da Fonseca \cite{cont} found that a few factors, which can be read as level, slope and curvature, account for most of the daily variation of implied volatility surfaces.
+The implied volatility smile of a liquid index changes every day, and the structure of those changes determines the risk of any portfolio of options. Principal component analysis of daily changes is the standard way to describe that structure. Cont and da Fonseca \cite{cont} found that a few factors, which can be read as level, slope and curvature, account for most of the daily variation of implied volatility surfaces. Avellaneda et al.\ \cite{avellaneda} apply PCA to OptionMetrics implied volatility surfaces of US equities, the same source used here, and find a dominant factor close to a market wide volatility index.
 
 A physical reading of the same decomposition treats the smile as an elastic membrane. Local shocks deform it, and an effective stiffness spreads and damps the deformation. Le Coz and Bouchaud \cite{lecoz} develop this kind of model for the forward rate curve. For the smile, the simplest version is a stochastic heat equation on a moneyness axis $z$,
 \begin{equation}
@@ -40,7 +41,7 @@ This paper set out to test that prediction on SPX data. The test turned into a s
 \item Several modes are negatively autocorrelated over two to five days, a pattern that measurement noise alone does not create. Its source is not identified.
 \end{enumerate}
 
-Section~\ref{sec:theory} sets out the membrane model and the prediction for daily changes. Section~\ref{sec:data} describes the data, the panel and the vendor's kernel, and Sec.~\ref{sec:validation} the checks on the code. Sections~\ref{sec:spectrum} to \ref{sec:relax} report the measurements and tests, and Sec.~\ref{sec:discussion} discusses what the instrument can and cannot decide. The decision rules for the tests were written down before the tests were run; Appendix~\ref{app:ledger} records them together with the one rule that was amended after its results existed. This version replaces an earlier draft whose results came from a flawed panel; Appendix~\ref{app:corrections} lists the corrections.
+Section~\ref{sec:theory} sets out the membrane model and the prediction for daily changes. Section~\ref{sec:data} describes the data, the panel and the vendor's kernel, and Sec.~\ref{sec:validation} the checks on the code. Sections~\ref{sec:spectrum} to \ref{sec:relax} report the measured spectrum and three tests: the kernel test, the seam test and the relaxation test. Their scripts carry the numbers of the items in the review of the earlier draft that proposed them (\texttt{test49\_vendor\_kernel.py} and \texttt{test47\_48.py}). Section~\ref{sec:discussion} discusses what the instrument can and cannot decide. The decision rules were written down before the tests were run. For the seam and relaxation tests the commit history confirms this. The rules of the kernel test were committed together with later follow up analyses, so for that test the history cannot confirm the order. Appendix~\ref{app:ledger} records the rules and outcomes, including the one rule that was amended after its results existed. This version replaces an earlier draft whose results came from a flawed panel; Appendix~\ref{app:corrections} lists the corrections.
 
 \section{The membrane model and its prediction for daily changes}
 \label{sec:theory}
@@ -86,13 +87,13 @@ Each pillar is placed at
 \begin{equation}
 z \;=\; \frac{\log(K/S)}{\sigma_{\mathrm{ATM}}\sqrt{T}},
 \end{equation}
-where $K$ is the vendor's implied strike, $S$ the index level, $T$ the maturity in years and $\sigma_{\mathrm{ATM}}$ the average of the 50 delta call and put volatilities on that day. Using the vendor's strike keeps the coordinate consistent with the vendor's own pricing assumptions. Scaling by $\sigma_{\mathrm{ATM}}$ rather than by each pillar's own volatility avoids a coordinate that merely relabels delta. Calendar days are converted to the 252 day trading year before computing $T$.
+where $K$ is the vendor's implied strike, $S$ the index level, $T$ the maturity in years and $\sigma_{\mathrm{ATM}}$ the average of the 50 delta call and put volatilities on that day. Using the vendor's strike keeps the coordinate consistent with the vendor's own pricing assumptions. Scaling by $\sigma_{\mathrm{ATM}}$ rather than by each pillar's own volatility avoids a coordinate that merely relabels delta. $T$ is the number of calendar days to expiry divided by 365. The index level is used rather than the forward. The difference shifts every pillar by $(r-q)\sqrt{T}/\sigma_{\mathrm{ATM}}$ in $z$; a rough estimate with interest and dividend rates from the period gives at most about 0.1, against a bin width of 0.28, and the shift changes slowly, so daily changes barely register it.
 
-Only out of the money pillars are kept ($|\Delta|\le0.50$), so puts populate $z<0$ and calls $z>0$ and each side of the smile comes from its more liquid instrument. Pillars are averaged within 8 equal bins on $z\in[-1.15,1.10]$, the window the delta grid can fill. A bin is kept if it has data on at least 95\% of days, and days with any empty kept bin are then dropped. The deepest put bin has data on only 89.1\% of days and is dropped. The panel is 2498 days by 7 bins, with bin centres at $z=-0.728,\,-0.447,\,-0.166,\,0.116,\,0.397,\,0.678,\,0.959$. The analysis variable is the daily change in implied volatility. It differs from delta hedged option returns by the gamma and theta carry, which mainly affects the level factor; the interpretation of mode 1 carries that caveat.
+Only out of the money pillars are kept ($|\Delta|\le0.50$), so puts populate $z<0$ and calls $z>0$ and each side of the smile comes from its more liquid instrument. Pillars are averaged within 8 equal bins on $z\in[-1.15,1.10]$, the window the delta grid can fill. A bin is kept if it has data on at least 95\% of days, and days with any empty kept bin are then dropped. The deepest put bin has data on only 89.1\% of days and is dropped. One day lacks data in the outermost call bin and is dropped, so one of the 2497 daily changes spans two trading days. The panel is 2498 days by 7 bins, with bin centres at $z=-0.728,\,-0.447,\,-0.166,\,0.116,\,0.397,\,0.678,\,0.959$. The analysis variable is the daily change in implied volatility. It differs from delta hedged option returns by the gamma and theta carry, which mainly affects the level factor; the interpretation of mode 1 carries that caveat.
 
 \subsection{The vendor's kernel}
 
-According to the IvyDB reference manual \cite{ivydb}, the volatility at each pillar $j$ is a weighted average of the implied volatilities $\sigma_i$ of all options on that day,
+According to the IvyDB reference manual \cite{ivydb} (also quoted in \cite{avellaneda}), the volatility at each pillar $j$ is a weighted average of the implied volatilities $\sigma_i$ of all options on that day,
 \begin{equation}
 \hat\sigma_j \;=\; \frac{\sum_i V_i\,\Phi(x_{ij},y_{ij},z_{ij})\,\sigma_i}{\sum_i V_i\,\Phi(x_{ij},y_{ij},z_{ij})},\qquad
 \Phi \;\propto\; \exp\!\Big(-\frac{x^2}{2h_1}-\frac{y^2}{2h_2}-\frac{z^2}{2h_3}\Big),
@@ -149,7 +150,7 @@ Table~\ref{tab:spectrum} gives the spectrum and Table~\ref{tab:loadings} the lea
 
 The tail exponent over modes 2 to 7 is $p=4.44$, with interval 4.18 to 4.67. The local slopes between neighbouring modes are 4.97, 4.54, 3.94, 4.42 and 3.72, with intervals [4.16, 5.63], [3.47, 5.62], [2.67, 5.56], [1.61, 6.32] and [2.43, 5.54]. None of them is distinguishable from 4.4, so on log scales the measured tail is consistent with a straight line.
 
-\section{Unsmoothed diffusion and the vendor's kernel}
+\section{Unsmoothed diffusion and the vendor's kernel: the kernel test}
 \label{sec:kernel}
 
 \subsection{Design of the test}
@@ -181,13 +182,13 @@ $D$ ($z^2$/day) & $q=0$ & $q=0.2$ & $q=0.5$ & $q=0$ & $q=0.2$ & $q=0.5$ \\
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:grid} shows the result. Without the kernel the tail exponent saturates at $2.630\pm0.013$ in the fast limit, well below the measured 4.44. Unsmoothed diffusion is therefore ruled out on this instrument. An earlier version of this analysis put the ceiling at 1.87. The ceiling has risen, but the measured tail has risen more, so the gap between them has grown from 0.66 to 1.81. An analytic decomposition, applying one change at a time, starts from 1.86 on the earlier instrument. Sampling a continuous field instead of a truncated one adds 0.17, sampling at the bin centres adds 0.10, dropping the deepest put bin subtracts 0.20, adding the level factor adds 0.46, and the pillar and binning steps of the full simulation add the last 0.23. The level factor is the largest single contribution, although the split depends on the order in which the changes are applied.
+Table~\ref{tab:grid} shows the result. Without the kernel the tail exponent saturates at $2.630\pm0.013$ in the fast limit, well below the measured 4.44. Unsmoothed diffusion is therefore ruled out on this instrument. An earlier version of this analysis put the ceiling at 1.87. The ceiling has risen, but the measured tail has risen more, so the gap between them has grown from 0.66 to 1.81. An analytic decomposition, applying one change at a time, starts from 1.86, the analytic value for the earlier instrument (whose simulated ceiling was 1.87). Sampling a continuous field instead of a truncated one adds 0.17, sampling at the bin centres adds 0.10, dropping the deepest put bin subtracts 0.20, adding the level factor adds 0.46, and the pillar and binning steps of the full simulation add the last 0.23. The level factor is the largest single contribution, although the split depends on the order in which the changes are applied.
 
-With the kernel switched on the exponent rises by between 2.9 and 4.1 in every cell. Four cells land inside the measured interval: $4.49\pm0.03$, $4.31\pm0.02$, $4.24\pm0.01$ and $4.53\pm0.02$. Since the runs with and without the kernel differ only in the bandwidths, the entire shift from 2.63 to about 4.4 is attributable to the kernel.
+With the kernel switched on the exponent rises by between 2.9 and 4.1 in every cell. Four cells land inside the measured interval: $4.49\pm0.03$, $4.31\pm0.02$, $4.24\pm0.01$ and $4.53\pm0.02$. Without the kernel the same four cells give between 0.76 and 1.28. The runs with and without the kernel differ only in the bandwidths, so in each of these cells the rise into the measured interval is due to the kernel alone.
 
 \begin{figure}[t]\centering
 \includegraphics[width=.72\linewidth]{figures/fig1_spectrum.pdf}
-\caption{Shares of tail variance (modes 2 to 7) on log scales. Red: the SPX 30 day panel with 95\% bootstrap intervals. Blue: kernel smoothed pure diffusion in the four cells whose exponent lies inside the measured interval. Dashed: unsmoothed diffusion at its ceiling. The smoothed spectra match the measured exponent but bend downward, while the measured tail stays close to a straight line.}
+\caption{Shares of tail variance (modes 2 to 7) on log scales. Red: the SPX 30 day panel with 95\% bootstrap intervals. Blue: kernel smoothed pure diffusion in the four cells whose exponent lies inside the measured interval. Dashed: unsmoothed diffusion at its ceiling. The smoothed spectra match the measured exponent but bend downward, while the measured tail stays close to a straight line. Exponents in the legend are fitted to the spectra averaged over seeds and can differ from Table~\ref{tab:grid}, which averages the exponents of the individual seeds, in the last digit.}
 \label{fig:spectrum}
 \end{figure}
 
@@ -195,7 +196,7 @@ The shape is a different matter (Fig.~\ref{fig:spectrum}). In the four matching 
 
 The vendor's kernel can therefore produce the steepness of the measured tail but not the shape of that steepness. On this evidence the steep tail cannot be credited to a bending term in the dynamics, and it cannot be dismissed as smoothing either.
 
-\section{The call and put seam}
+\section{The call and put seam: the seam test}
 \label{sec:seam}
 
 The step in mode 2 sits exactly where the panel switches from the put surface to the call surface. If the two surfaces carry independent errors, their difference at the money should move from day to day. I measure that difference directly, $\delta_t=\sigma^{\mathrm{call}}_{50}(t)-\sigma^{\mathrm{put}}_{50}(t)$ at 30 days, and regress the daily returns of each factor on $\Delta\delta_t$. For a single consistent surface the two 50 delta volatilities refer to the same strike and $\delta_t$ would not move.
@@ -218,7 +219,7 @@ Mode & $R^2$ & 95\% interval \\
 
 The rule fixed in advance reads mode 2 as not substantially tied to the seam if the upper end of its interval is below 0.5, as substantially tied if the lower end is above 0.5, and as ambiguous otherwise. Table~\ref{tab:seam} gives $R^2=0.572$ with interval 0.427 to 0.678, so the formal reading is ambiguous. Even the lower end of that interval means that more than two fifths of the second factor's daily variance moves with a quantity that should not move at all for a single surface. Mode 3 is affected to a lesser degree, and modes 1 and 4 hardly at all. The second factor of this panel, conventionally read as skew, is therefore partly a property of how the vendor assembles the surface.
 
-\section{Relaxation over a few days}
+\section{Relaxation over a few days: the relaxation test}
 \label{sec:relax}
 
 \begin{table}[t]
@@ -240,20 +241,20 @@ Mode & Lag 1 & 95\% interval & $S$ (lags 2 to 5) & 95\% interval \\
 \end{tabular}
 \end{table}
 
-This test is a measurement and does not use any fitted rates. By Eq.~\eqref{eq:acf}, a negative lag one autocorrelation on its own cannot separate relaxation from measurement noise, so the criterion fixed in advance also requires longer lags. It is met if the lag one interval lies below zero for modes 2 and 3 and the interval for $S$ lies below zero for at least one of them. On simulated panels from the harness of Sec.~\ref{sec:kernel}, a membrane relaxing much faster than one day gives lag one values near $-0.5$ with $S$ near zero and fails the criterion, while $\gamma_1\approx0.2$ per day gives lag one near $-0.25$ with $S$ near $-0.13$ and passes.
+This test is a measurement and does not use any fitted rates. By Eq.~\eqref{eq:acf}, a negative lag one autocorrelation on its own cannot separate relaxation from measurement noise, so the criterion fixed in advance also requires longer lags. It is met if the lag one interval lies below zero for modes 2 and 3 and the interval for $S$ lies below zero for at least one of them. On simulated panels from the harness of Sec.~\ref{sec:kernel}, a membrane relaxing much faster than one day gives lag one values near $-0.5$ with $S$ near zero and fails the criterion, while $\gamma_1\approx0.2$ per day gives lag one values of $-0.23$ and $-0.26$ for modes 2 and 3, with $S$ of $-0.14$ and $-0.13$, and passes.
 
-Table~\ref{tab:acf} shows that all tail modes have lag one autocorrelations between $-0.27$ and $-0.39$, and that $S$ is significantly negative for modes 2, 4, 5 and 7. The criterion is met, so there is structure on a scale of days that noise alone does not produce. Its source is open. Mode 2 is substantially tied to the seam (Sec.~\ref{sec:seam}), and vendor errors that decay over a few days would leave exactly this signature. Pillars drifting between bins as the smile moves could do the same in the higher modes. Relaxation faster than about one day is invisible at daily sampling whatever its source, so this test cannot rule out a fast operator.
+Table~\ref{tab:acf} shows that all tail modes have lag one autocorrelations between $-0.27$ and $-0.39$, and that $S$ is significantly negative for modes 2, 4, 5 and 7. For modes 2 and 4 the upper end of the interval for $S$ is $-0.007$, so the evidence there is marginal. The bootstrap joins blocks at random, which breaks up to a fifth of the pairs at lag 5 and pulls the replicated autocorrelations toward zero, so these intervals are, if anything, conservative. The criterion is met, so there is structure on a scale of days that noise alone does not produce. Its source is open. Mode 2 is partly tied to the seam (Sec.~\ref{sec:seam}), and vendor errors that decay over a few days would leave exactly this signature. Pillars drifting between bins as the smile moves could do the same in the higher modes. Relaxation faster than about one day is invisible at daily sampling whatever its source, so this test cannot rule out a fast operator.
 
 \section{Discussion}
 \label{sec:discussion}
 
 \paragraph{What the data show.} The 30 day SPX smile, as published by the vendor, moves mostly as a whole, with a second factor that changes sign at the money and a tail that falls as $k^{-4.4}$. Diffusion observed without smoothing cannot produce that tail. Diffusion passed through the vendor's kernel reproduces its steepness but not its shape. The second factor is partly tied to the seam between the call and put surfaces, and several factors relax over a few days for reasons that are not yet clear.
 
-\paragraph{What the instrument cannot decide.} Before tests 47 and 48 were run, I fixed a rule for what would follow. A forward model that includes the kernel, fitted to the measured spectrum, would be built only if mode 2 proved not to be substantially tied to the seam and the relaxation criterion was met. The seam result was ambiguous, so the rule was not satisfied and that model was not built. The question of which operator, if any, governs the smile therefore remains open. It has not been answered in either direction.
+\paragraph{What the instrument cannot decide.} Before the seam and relaxation tests were run, I fixed a rule for what would follow. A forward model that includes the kernel, fitted to the measured spectrum, would be built only if mode 2 proved not to be substantially tied to the seam and the relaxation criterion was met. The seam result was ambiguous, so the rule was not satisfied and that model was not built. The question of which operator, if any, governs the smile therefore remains open. It has not been answered in either direction.
 
 \paragraph{The measurement that would decide it.} Rebuilding the 30 day slice from raw option quotes (OptionMetrics \texttt{opprcd}), as one surface consistent with parity between calls and puts, removes both the kernel and the seam. A spectrum measured that way could be compared with Eq.~\eqref{eq:forward} directly. The same data would also reach deeper into the wings than the delta grid allows and give access to higher modes.
 
-\paragraph{Limitations.} The synthetic harness has no structure across maturities, so the maturity part of the kernel acts on a field that is the same at every expiry; it does not model the vega cutoff; and its quote noise is independent across options. The analysis uses one maturity and one index. Changes in implied volatility at fixed $z$ include the gamma and theta carry, which mainly affects mode 1. The tail statistics rest on six modes, and the smallest shares are of order $10^{-4}$.
+\paragraph{Limitations.} The synthetic harness has no structure across maturities, so the maturity part of the kernel acts on a field that is the same at every expiry; it does not model the vega cutoff; and its quote noise is independent across options. The analysis uses one maturity and one index. Changes in implied volatility at fixed $z$ include the gamma and theta carry, which mainly affects mode 1. The tail statistics rest on six modes, and the smallest shares are of order $10^{-4}$. A panel built directly on the fixed delta pillars, which would remove the noise from pillars moving between bins, was planned as a further test and is deferred.
 
 \section*{Acknowledgements}
 
@@ -261,24 +262,24 @@ This project was inspired by a conference talk by P.~Ioselevich on factor models
 
 \section*{Use of AI tools}
 
-I used AI assistants (mainly Claude, through chat and Claude Code) throughout this project. They wrote a large share of the code from my specifications and helped me learn the methods involved. I also used an AI model as a critical reviewer of the earlier draft; that review found the errors listed in Appendix~\ref{app:corrections}. The research question, the choice of data, the decisions about what to test and what to claim, and the interpretation are mine, and every number in this paper comes from scripts I ran myself.
+I used AI assistants (mainly Claude, through chat and Claude Code) throughout this project. They wrote a large share of the code from my specifications and helped me learn the methods involved. I also used an AI model as a critical reviewer of the earlier draft; that review found the errors listed in Appendix~\ref{app:corrections}. The research question, the choice of data, the decisions about what to test and what to claim, and the interpretation are mine, and every result in this paper comes from scripts I ran myself.
 
 \appendix
 
 \section{Prediction ledger}
 \label{app:ledger}
 
-Each test states its decision rule in the docstring of its script, written before the test was run. The entries below record the rules and their outcomes, in the order they happened.
+Each test states its decision rule in the docstring of its script, written before the test was run. For the seam and relaxation tests the commit history shows the rules before the results; for the kernel test it cannot, because the rules were committed together with later follow up analyses. Edits made to the scripts after their runs are listed in the scripts themselves and change no rule or result. The entries below record the rules and their outcomes, in the order they happened.
 
-\paragraph{Test 49, validity check.} The rule required that unsmoothed diffusion give a tail exponent of at most 2.5, so that the harness could not produce the measured tail without the kernel. The threshold was derived from the diffusion ceiling of the earlier instrument (1.87), which no longer applied after the corrections in Appendix~\ref{app:corrections}. The check failed: the ceiling on the corrected instrument is $2.630\pm0.013$. After these results existed, the check was amended to test its stated purpose directly: the largest exponent without the kernel, plus two seed standard deviations, must lie below the lower end of the measured interval. The amended check passes ($2.656<4.182$). The conclusions in Sec.~\ref{sec:kernel} rest on the results with the kernel switched on, not on this check.
+\paragraph{Kernel test, validity check.} The rule required that unsmoothed diffusion give a tail exponent of at most 2.5, so that the harness could not produce the measured tail without the kernel. The threshold was derived from the diffusion ceiling of the earlier instrument (1.87), which no longer applied after the corrections in Appendix~\ref{app:corrections}. The check failed: the ceiling on the corrected instrument is $2.630\pm0.013$. After these results existed, the check was amended to test its stated purpose directly: the largest exponent without the kernel, plus two seed standard deviations, must lie below the lower end of the measured interval. The amended check passes ($2.656<4.182$); the script prints it after the original verdict, labelled as amended. The conclusions in Sec.~\ref{sec:kernel} rest on the results with the kernel switched on, not on this check.
 
-\paragraph{Test 49, verdict.} Smoothing is sufficient for the tail exponent: four cells with the kernel on lie inside the measured interval. It fails on the shape, inside the tail: mode 2 holds 0.45 to 0.57 of the tail variance against a measured 0.837, and the local slopes rise from about 1 to about 12.5 against a measured profile that stays near 4.4. The level kick was fixed before the run by trying three values at one reference cell and looking only at the mode 1 share, so the agreement in mode 1 is tuned. The operator question stays open.
+\paragraph{Kernel test, verdict.} Smoothing is sufficient for the tail exponent: four cells with the kernel on lie inside the measured interval. It fails on the shape, inside the tail: mode 2 holds 0.45 to 0.57 of the tail variance against a measured 0.837, and the local slopes rise from about 1 to about 12.5 against a measured profile that stays near 4.4. The level kick was fixed before the run by trying three values at one reference cell and looking only at the mode 1 share, so the agreement in mode 1 is tuned. The operator question stays open.
 
-\paragraph{Test 47.} $R^2=0.572$ [0.427, 0.678] for mode 2. Ambiguous under the rule, since the interval contains 0.5.
+\paragraph{Seam test.} $R^2=0.572$ [0.427, 0.678] for mode 2. Ambiguous under the rule, since the interval contains 0.5.
 
-\paragraph{Test 48.} Criterion met: lag one negative for all tail modes, $S$ negative for modes 2, 4, 5 and 7. The test detects relaxation on scales of a day or longer only, so failure would have closed the question of dynamics at daily sampling without deciding anything about the static structure. The source of the relaxation is not identified.
+\paragraph{Relaxation test.} Criterion met: lag one negative for all tail modes, $S$ negative for modes 2, 4, 5 and 7. The test detects relaxation on scales of a day or longer only, so failure would have closed the question of dynamics at daily sampling without deciding anything about the static structure. The source of the relaxation is not identified.
 
-\paragraph{Scope rule.} Fixed before tests 47 and 48 reported: build a forward model that includes the kernel only if test 47 gives an upper interval end below 0.5 and test 48 meets its criterion. Test 47 did not, so the model was not built, although test 48 passed. The fitted membrane model of the earlier draft and the out of sample risk comparison built on it were removed rather than refitted, since the paper no longer makes claims that depend on them.
+\paragraph{Scope rule.} Fixed before the seam and relaxation tests reported: build a forward model that includes the kernel only if the seam test gives an upper interval end below 0.5 and the relaxation test meets its criterion. The seam test did not, so the model was not built, although the relaxation test passed. The fitted membrane model of the earlier draft and the out of sample risk comparison built on it were removed rather than refitted, since the paper no longer makes claims that depend on them.
 
 \paragraph{Measurement model.} The vendor's kernel is treated as part of the measurement, not as a limitation. Any claim about an operator, in this work or in an extension to finer data, needs a forward model that includes it.
 
@@ -298,12 +299,15 @@ An earlier draft reported a fitted membrane with tension and bending, a feature 
 
 \section{Reproducibility}
 
-The code is at the repository above. A script downloads the data once from WRDS; the data are licensed and not included. Every number in this paper is printed by one of the following scripts: \texttt{build\_panel.py} (panel, spectrum, loadings), \texttt{bootstrap\_real\_spectrum.py} (all intervals in Sec.~\ref{sec:spectrum}), \texttt{test49\_vendor\_kernel.py} (Table~\ref{tab:grid}), \texttt{test49\_followups.py} (the ceiling decomposition and the shape comparison), \texttt{test47\_48.py} (Tables~\ref{tab:seam} and \ref{tab:acf}, and in its validation mode the criterion check on simulated panels) and \texttt{make\_figures.py} (Fig.~\ref{fig:spectrum}). Randomness is seeded throughout.
+\begin{sloppypar}
+The code is at the repository above. A script downloads the data once from WRDS; the data are licensed and not included. Apart from values quoted from the earlier draft and the rough estimate of the forward correction in Sec.~\ref{sec:data}, every number in this paper is printed by one of the following scripts: \texttt{build\_panel.py} (panel, spectrum, loadings), \texttt{bootstrap\_real\_spectrum.py} (all intervals in Sec.~\ref{sec:spectrum}), \texttt{test49\_vendor\_kernel.py} (Table~\ref{tab:grid} and both validity checks), \texttt{test49\_followups.py} (the ceiling decomposition and the shape comparison), \texttt{test47\_48.py} (Tables~\ref{tab:seam} and \ref{tab:acf}, and in its validation mode the criterion check on simulated panels) and \texttt{make\_figures.py} (Fig.~\ref{fig:spectrum}). Randomness is seeded throughout.
+\end{sloppypar}
 
 \begin{thebibliography}{9}
 \bibitem{cont} Cont, R.\ and da Fonseca, J.\ (2002). Dynamics of implied volatility surfaces. \emph{Quantitative Finance} 2(1).
 \bibitem{lecoz} Le~Coz, V.\ and Bouchaud, J.P.\ (2024). Revisiting elastic string models of forward interest rates. \emph{Quantitative Finance} 24.
 \bibitem{ivydb} OptionMetrics. \emph{IvyDB US Reference Manual}, version 7.0.
+\bibitem{avellaneda} Avellaneda, M., Healy, B., Papanicolaou, A.\ and Papanicolaou, G.\ (2020). PCA for implied volatility surfaces. arXiv:2002.00085.
 \end{thebibliography}
 
 \end{document}

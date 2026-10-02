@@ -12,7 +12,7 @@ gamma_k = D q_k^2 + kappa q_k^4, q_k = k pi / L, simulated exactly in time.
 An optional uniform level factor (OU, slow) can be added.
 
 The simulator generates known ground truth for checking the pipeline (PCA,
-binning, the forward model in ``calibration.model_spectrum``) and drives the
+binning, the forward model in ``forward_model.model_spectrum``) and drives the
 vendor-kernel harness in ``scripts/test49_vendor_kernel.py``. Agreement on
 synthetic data validates code, not physics.
 
@@ -24,7 +24,7 @@ from dataclasses import dataclass
 
 
 # ---------------------------------------------------------------------------
-# Shared definitions (used by the simulator and by calibration.model_spectrum)
+# Shared definitions (used by the simulator and by forward_model.model_spectrum)
 # ---------------------------------------------------------------------------
 
 def wavenumbers(n_modes: int, L: float) -> np.ndarray:

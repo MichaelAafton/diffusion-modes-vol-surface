@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 import scripts.test49_vendor_kernel as t49
-from src.calibration import model_spectrum
+from src.forward_model import model_spectrum
 from src.pca import slope
 from src.simulate import bin_centres, cosine_basis, wavenumbers
 

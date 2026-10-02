@@ -1,7 +1,7 @@
 """Tests 47 (seam) and 48 (relaxation) on the study panel.
 
-PRE-REGISTRATION (fixed before any run on real data; sign-off: supervisor)
---------------------------------------------------------------------------
+PRE-REGISTRATION:
+
 Common inputs. Study panel (build_study_panel): daily changes, correlation PCA,
 factor returns f_m = standardised changes projected on eigenvector m (m = 1..7).
 Uncertainty: moving-block bootstrap, block 25 days, 1000 replicates, seed 0
@@ -18,7 +18,7 @@ Test 47 - is mode 2 the put/call seam?
                     interval straddles 0.5 -> ambiguous.
 
 Test 48 - is there resolvable relaxation? (a measurement, not a comparison
-  with any fitted gamma; the pre-Step-1 gammas are not used)
+  with any fitted gamma; no fitted rates are used)
   Statistic: autocorrelation of f_m at lags 1..5, and S_m = sum of lags 2..5.
   Readings, stated before running:
    - no relaxation:            all lags ~ 0
@@ -41,8 +41,8 @@ Test 48 - is there resolvable relaxation? (a measurement, not a comparison
   cannot see it. A failed test 48 therefore closes the dynamics claim at this
   sampling frequency only; it does not adjudicate statics.
 
-Scope rule (supervisor, pre-registered): a kernel-convolved forward model
-  (Step 3 refit, kernel o (level + operator)) is undertaken only if test 47 is
+Scope rule (pre-registered): a kernel-convolved forward model
+  (kernel o (level + operator)) is fitted only if test 47 is
   "NOT substantially seam" AND test 48 meets the criterion above. Otherwise the
   operator question is recorded as open and unresolved (not refuted), and the
   paper ships as the measurement study.
@@ -105,7 +105,9 @@ def bootstrap(f, dseam):
     for _ in range(N_BOOT):
         idx = block_indices(T, rng)
         R2.append(r2(f[idx], dseam[idx]))
-        # autocorrelation within blocks only: concatenation seams are rare (1/BLOCK)
+        # Lag-h pairs that straddle a block join (up to h/BLOCK of them, 20% at lag 5)
+        # mix unrelated days; this pulls replicated autocorrelations toward zero, so
+        # intervals that exclude zero are, if anything, conservative.
         A.append(acf(f[idx]))
     return np.array(R2), np.array(A)
 
@@ -166,7 +168,7 @@ def main():
           f"S < 0 for mode 2 or 3: {s_neg}  ->  {'MET' if t48 else 'NOT MET'}")
 
     go = (t47 == "NOT substantially seam") and t48
-    print(f"\nScope rule: {'kernel-convolved refit (Step 3)' if go else 'measurement-study branch'}")
+    print(f"\nScope rule: {'fit a kernel-convolved forward model' if go else 'measurement-study branch'}")
 
 
 if __name__ == "__main__":
