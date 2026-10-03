@@ -47,6 +47,29 @@ Known limitations: bandwidths from a secondary source at the time of writing; th
   synthetic field has no maturity structure, so maturity mixing is
   under-represented (a B verdict is therefore weaker than an A verdict).
 
+Pre-run edit (after the rules were written, before any complete run, so not
+visible in this file's history): the kernel-OFF control computes the kernel
+weights in log space, because with tiny bandwidths every weight underflowed to
+zero. Kernel-ON results are unaffected.
+
+Post-run edits (no rule, threshold or design changed; the original text is in
+commit 304a51f):
+  - header: removed "(fixed before any run of this script)", because the commit
+    history cannot confirm that order for this script (see the report)
+  - bandwidth source: "as quoted from the IvyDB reference manual in Avellaneda
+    et al. 2020" -> "taken first from the quotation ... in Avellaneda et al.";
+    the bandwidths were then checked against the IvyDB US Reference Manual v7.0
+    and agree; "(to be checked against the manual)" -> "at the time of writing"
+  - consequence of verdict A: originally "the operator (bending) claim dies
+    (Step 4 decision tree, branch 1)", now "the tail slope gives no support to a
+    bending (operator) term". Reworded because the shape comparison made after
+    the run (report, Sec. 6) showed that the slope alone cannot settle the
+    operator question. The criterion for A is unchanged.
+  - KEPT_BINS comment reworded
+  - added: the amended validity check (function amended_check and its call at
+    the end of main), printed after the original verdict and labelled as amended
+    (report, Appendix A)
+
 Run:  python -m scripts.test49_vendor_kernel
 """
 from pathlib import Path

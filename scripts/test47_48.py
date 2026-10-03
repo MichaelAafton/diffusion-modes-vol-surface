@@ -47,6 +47,18 @@ Scope rule (pre-registered): a kernel-convolved forward model
   operator question is recorded as open and unresolved (not refuted), and the
   paper ships as the measurement study.
 
+Post-run edits (wording and comments only; no rule, statistic or threshold
+changed; the original text is in commit 5485053):
+  - header: removed "(fixed before any run on real data; sign-off: supervisor)"
+    and the underline below it
+  - test 48 heading: "the pre-Step-1 gammas are not used" -> "no fitted rates
+    are used"
+  - scope rule: "(supervisor, pre-registered)" -> "(pre-registered)"; removed
+    "Step 3 refit"; "is undertaken" -> "is fitted"
+  - bootstrap comment corrected: block joins affect up to h/BLOCK of the lag-h
+    pairs (20% at lag 5), not 1/BLOCK
+  - printed label of the refit branch reworded (that branch was not reached)
+
 Run:  python -m scripts.test47_48             (real data)
       python -m scripts.test47_48 --validate  (criterion check on synthetic data)
 """

@@ -1,0 +1,90 @@
+diff --git a/scripts/test49_vendor_kernel.py b/scripts/test49_vendor_kernel.py
+index 887d10d..7fe053a 100644
+--- a/scripts/test49_vendor_kernel.py
++++ b/scripts/test49_vendor_kernel.py
+@@ -1,6 +1,6 @@
+ """Test 49: can the vendor's smoothing alone produce the observed spectral tail?
+ 
+-PRE-REGISTRATION (fixed before any run of this script)
++PRE-REGISTRATION
+ ------------------------------------------------------
+ Question. The study panel's tail slope is p_tail = 4.444 (modes 2-7). OptionMetrics
+ builds vsurfd by kernel-smoothing raw option implied vols. Can that kernel, applied
+@@ -17,8 +17,8 @@ Truth (synthetic). sigma(z, t) = (sigma_A0 + level(t)) * s(z) + p(z, t) + quote
+   - quote noise: iid per raw option per day, s.d. q
+ Raw option universe. Expiries 16, 23, 30, 37, 44 calendar days; for each, calls and
+   puts at z = -4.00, -3.95, ..., 3.00 (strikes from z with that day's ATM vol).
+-Vendor kernel (IvyDB vsurfd, as quoted from the IvyDB reference manual in
+-  Avellaneda et al. 2020, App. A): pillar vol = vega-weighted average with weight
++Vendor kernel (IvyDB vsurfd; taken first from the quotation of the IvyDB
++  reference manual in Avellaneda et al. 2020, App. A): pillar vol = vega-weighted average with weight
+   exp(-(x^2/2h1 + y^2/2h2 + z^2/2h3)), x = log(T_i/T_j), y = call-equivalent delta
+   difference (fractional units), z = 1 if call/put type differs else 0;
+   h1 = 0.05, h2 = 0.005, h3 = 0.001 (=> call and put surfaces smoothed separately).
+@@ -36,15 +36,15 @@ block-bootstrap replicates (scripts/bootstrap_real_spectrum.py).
+   Harness validity: kernel-OFF cells must stay near the diffusion ceiling
+      (max cell mean p_tail <= 2.5). If not, the harness is broken: no verdict.
+   A  SMOOTHING SUFFICIENT: some kernel-ON cell has mean p_tail >= R_lo.
+-     => the operator (bending) claim dies (Step 4 decision tree, branch 1).
++     => the tail slope gives no support to a bending (operator) term.
+   B  SMOOTHING INSUFFICIENT: every kernel-ON cell has mean + 2*seed_sd < R_lo.
+      => bending survives this test, conditional on tests 47/48.
+   C  otherwise: ambiguous; report.
+ Prior (stated before running): A is more likely. A delta bandwidth of sqrt(h2) = 0.071
+   maps to sigma_z ~ 0.2-0.4, comparable to the bin width 0.28, which suppresses
+   mode power by ~exp(-q^2 sigma_z^2).
+-Known limitations: bandwidths from a secondary source (to be checked against the
+-  manual); the synthetic field has no maturity structure, so maturity mixing is
++Known limitations: bandwidths from a secondary source at the time of writing; the
++  synthetic field has no maturity structure, so maturity mixing is
+   under-represented (a B verdict is therefore weaker than an A verdict).
+ 
+ Run:  python -m scripts.test49_vendor_kernel
+@@ -73,7 +73,7 @@ Z_RAW = np.round(np.arange(-4.0, 3.0 + 1e-9, 0.05), 10)
+ PILLAR_DELTAS = np.array([10, 15, 20, 25, 30, 35, 40, 45, 50])
+ H_VENDOR = (0.05, 0.005, 0.001)
+ H_OFF = (1e-6, 1e-6, 0.001)
+-KEPT_BINS = [1, 2, 3, 4, 5, 6, 7]   # study instrument (Step 1 reference)
++KEPT_BINS = [1, 2, 3, 4, 5, 6, 7]   # the study panel's kept bins
+ 
+ D_GRID = [0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0]
+ Q_GRID = [0.0, 0.002, 0.005]
+@@ -203,6 +203,38 @@ def main():
+         print("VERDICT: B - smoothing insufficient")
+     else:
+         print("VERDICT: C - ambiguous")
++    amended_check(cells, r_lo, r_hi)
++
++
++def amended_check(cells, r_lo, r_hi):
++    """Amended validity check (added after the results existed; report Appendix A).
++
++    Tests the stated purpose of the original check directly: without the kernel the
++    harness must not reach the measured tail, i.e. the largest kernel-OFF mean plus two
++    seed standard deviations must lie below the lower end of the real interval.
++    """
++    off = cells[cells.kernel == "off"]
++    on = cells[cells.kernel == "on"]
++    top = off.loc[off.p_mean.idxmax()]
++    bound = top.p_mean + 2 * top.p_sd
++    passes = bound < r_lo
++    print("\nAMENDED validity check (added after the results above existed; see report, Appendix A)")
++    print(f"  max kernel-OFF p_tail + 2 seed sd = {top.p_mean:.3f} + 2 x {top.p_sd:.3f} = {bound:.3f}"
++          f"  vs real lower bound {r_lo:.3f}  ->  {'PASSES' if passes else 'FAILS'}")
++    if not passes:
++        return
++    inside = on[(on.p_mean >= r_lo) & (on.p_mean <= r_hi)]
++    print(f"  kernel-ON cells inside the real interval [{r_lo:.3f}, {r_hi:.3f}]:")
++    for _, c in inside.iterrows():
++        off_c = off[(off.q == c.q) & (off.D == c.D)].iloc[0]
++        print(f"    q={c.q:.3f} D={c.D:<5}  kernel off {off_c.p_mean:.3f}  ->  kernel on "
++              f"{c.p_mean:.3f} +/- {c.p_sd:.3f}")
++    if (on.p_mean >= r_lo).any():
++        print("  verdict under the amended check: A - smoothing sufficient (for the tail exponent)")
++    elif ((on.p_mean + 2 * on.p_sd) < r_lo).all():
++        print("  verdict under the amended check: B - smoothing insufficient")
++    else:
++        print("  verdict under the amended check: C - ambiguous")
+ 
+ 
+ if __name__ == "__main__":
